@@ -1,0 +1,171 @@
+body
+{
+	background: #FFFFFF;
+	font-family: "Arial", "Helvetica", sans-serif;
+	width: 480px;
+	margin: 0 auto;
+}
+
+strong
+{
+	color: #000000;
+}
+
+.tiny
+{
+	font-size: 9pt;
+}
+
+code
+{
+	color: #008000;
+	font-family: "Courier New", monospace;
+	font-weight: bold;
+}
+
+a
+{
+	color: #808080;
+}
+
+#header p
+{
+	font-size: 24pt;
+	margin: 16px 0 0 0;
+}
+
+#main
+{
+	text-align: left;
+	font-size: 12pt;
+	color: #808080;
+}
+
+.subhead
+{
+	color: #000000;
+}
+
+.section
+{
+	border-top: solid 1px #C0C0C0;
+}
+
+.select a
+{
+	font-size: 12pt;
+	color: #808080;
+	background: #FFFFFF;
+	text-decoration: none;	
+}
+
+.select a:hover
+{
+	font-size: 12pt;
+	color: #FFFFFF;
+	background: #C0C0C0;
+	text-decoration: none;	
+}
+
+#footer
+{
+	border-top: solid 1px #C0C0C0;
+	font-size: 9pt;
+	color: #808080;
+}
+
+#footer a
+{
+	color: #808080;
+	text-decoration: underline;		
+}
+
+#footer a:hover
+{
+	color: #000000;
+	text-decoration: underline;		
+}
+
+#nav
+{
+	list-style: none;
+	padding-left: 0;
+	margin-left: 0;
+	float: left;
+	width: 100%;
+	
+	/* Bring the nav above everything else--uncomment if needed. */
+	
+	/* position: relative; z-index: 5; */
+}
+
+#nav li
+{
+	float: left;
+	position: relative;
+	padding-right: 0;
+	margin-right: 8px; /* spacing of menu items */
+}
+
+#nav a
+{
+	display: block;
+	padding: 4px;
+	color: #808080;
+	background: #FFFFFF;
+	text-decoration: none;
+}
+
+#nav a:hover
+{
+	color: #FFFFFF;
+	background: #C0C0C0;
+	text-decoration: none;
+}
+
+/* Dropdowns */
+
+#nav ul
+{
+	/* background: #FFFFFF;	background: rgba(255,255,255,0); */
+	list-style: none;
+	position: absolute;
+	left: -9999px;
+	margin-left: 0;
+	padding-left: 0;
+}
+
+#nav ul li
+{
+	border-top: solid 1px #FFFFFF;
+	float: none;
+}
+
+#nav ul a
+{
+	white-space: nowrap;
+}
+
+#nav li:hover ul
+{ 
+	left: 2em; /* This is the horizontal offset */
+}
+
+#nav li:hover a
+{ 
+	color: #FFFFFF;
+	background: #C0C0C0;
+	text-decoration: none;
+}
+
+#nav li:hover ul a
+{ 
+	text-decoration:none;
+}
+
+#nav li:hover ul li a:hover
+{ 
+	color: #000000;
+	background: #C0C0C0;
+}
+

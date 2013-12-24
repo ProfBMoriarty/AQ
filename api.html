@@ -1,0 +1,508 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<title>AQ | API</title>
+	<meta charset="utf-8"/>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+	<meta name="description" content="AQ | API"/>
+	<meta name="keywords" content="aq, audio, sound, engine, html, html5, web, api, javascript, wpi"/>
+	<meta name="viewport" content="width=device-width; initial-scale=1.0"/>
+	<link rel="shortcut icon" href="http://users.wpi.edu/~bmoriarty/aq/favicon.png" />
+	<link rel="apple-touch-icon" href="http://users.wpi.edu/~bmoriarty/aq/apple-touch-icon.png" />
+	<link rel="stylesheet" href="style.css" type="text/css">
+</head>
+<body>
+<div id="header">
+	<img src="images/logo.png" style="margin-top: 32px;" alt="[AQ logo]">
+	<ul id="nav">
+		<li><a href="index.html">Home</a></li>
+		<li><a href="download.html">Download</a></li>
+		<li><a href="setup.html">Setup</a></li>
+		<li><a href="api.html">API</a></li>
+		<li><a href="examples.html">Examples</a></li>
+		<li><a href="links.html">Links</a></li>
+	</ul>
+</div>
+
+<div id="main">
+
+<p><strong>API</strong></p>
+
+<p>This page describes the application programming interface (API) for the AQ engine.</p>
+
+<ul id="select">
+	<li><a href="#init">AQ.init</a> ( params )</li>
+	<li><a href="#load">AQ.load</a> ( name, params )</li>
+	<li><a href="#play">AQ.play</a> ( name, params )</li>
+	<li><a href="#pause">AQ.pause</a> ( channel )</li>
+	<li><a href="#stop">AQ.stop</a> ( channel )</li>
+</ul>
+
+<div class="section">
+	<p id="init" class="subhead"><strong>AQ.init ( params )</strong></p>
+
+	<p>AQ.init() initializes the AQ audio engine. It should be called only once, at application startup.</p>
+
+	<p>Parameters:</p>
+	<ol>
+		<li>(optional) params : <em>object</em></li>
+	</ol>
+	<p>Returns:</p>
+	<ul>
+		<li><code>AQ.HTML5_AUDIO</code>, <code>AQ.WEB_AUDIO</code> or <code>AQ.ERROR</code></li>
+	</ul>
+
+	<p>The optional <em>params</em> object can contain any of the following properties:</p>
+
+	<ul>
+		<li><code>defaultPath</code> : <em>string</em> or AQ.DEFAULT</li>
+		<li><code>defaultFileTypes</code> : <em>array</em> or AQ.DEFAULT</li>
+		<li><code>onAlert</code> : <em>function</em> or AQ.DEFAULT</li>
+		<li><code>stack</code> : <em>boolean</em> or AQ.DEFAULT</li>
+		<li><code>forceHTML5</code> : <em>boolean</em> or AQ.DEFAULT</li>
+	</ul>
+
+	<p><code>defaultPath</code></p>
+
+	<p>The optional <code>defaultPath</code> property should be a string containing the case-sensitive pathname to the
+		default directory for audio files. The path can be either relative to the directory containing the aq.js script file,
+		or an absolute, fully-qualified pathname.</p>
+
+	<p>If <code>defaultPath</code> is an empty string (""), <em>null</em>, <code>AQ.DEFAULT</code> or not supplied,
+		the default path is set to an empty string (""), indicating that audio files are presumed to reside in the same
+		directory as the aq.js script file.</p>
+
+	<p><code>defaultFileTypes</code></p>
+
+	<p>The optional <code>defaultFileTypes</code> property defines the types and priorities of audio files provided by
+		the application. It should be an array containing one or more of the following case-sensitive strings:
+
+	<ul>
+		<li>"wav"</li>
+		<li>"ogg"</li>
+		<li>"mp3"</li>
+		<li>"opus"</li>
+		<li>"aac"</li>
+		<li>"webm"</li>
+	</ul>
+
+	<p>The strings in the array should appear in the order of loading preference. For example, if your application
+		provides audio files in .ogg, .mp3 and .wav formats(as recommended),
+		the <code>defaultFileTypes</code> property should be specified as:</p>
+
+	<p><code>defaultFileTypes:
+		[<span>&nbsp;</span>"ogg",<span>&nbsp;</span>"mp3",<span>&nbsp;</span>"wav"<span>&nbsp;</span>]</code></p>
+
+	<p>This tells the engine to try loading compressed .ogg files first, then compressed .mp3 files, and finally
+		uncompressed .wav files.</p>
+
+	<p>If <code>defaultFileTypes</code> is <em>null</em>, <code>AQ.DEFAULT</code> or not supplied,
+		the default array [<span>&nbsp;</span>"wav"<span>&nbsp;</span>] is used, allowing only .wav files to be loaded.
+	</p>
+
+	<p><code>onAlert</code></p>
+
+	<p>The optional <code>onAlert</code> property should be a function in your application that accepts a single string
+		parameter and displays the string in an obvious way.
+		All error and debugging messages from the AQ engine are passed to this function.
+		Note that the string passed to the <code>onAlert</code> function may consist of multiple lines separated by
+		newline characters ('\n').</p>
+
+	<p>If <code>onAlert</code> is <em>null</em>, <code>AQ.DEFAULT</code> or not supplied, AQ error messages are
+		<em>not</em> displayed.</p>
+
+	<p>It is strongly recommended that you specify an <code>onAlert</code> function, especially during application
+		development.</p>
+
+	<p><code>stack</code></p>
+
+	<p>If <code>stack</code> is <em>true</em> or a non-zero number,
+		the error messages sent to your <code>onAlert</code> function will include Javscript stack trace information.
+	</p>
+
+	<p>If <code>stack</code> is <em>false</em>, <em>null</em>, zero (0), <code>AQ.DEFAULT</code> or not supplied,
+		stack trace information is not displayed.</p>
+
+	<p><code>forceHTML5</code></p>
+
+	<p>If <code>forceHTML5</code> is <em>true</em> or a non-zero number,
+		AQ will use the HTML5 audio engine regardless of the browser's capabilities.</p>
+
+	<p>If <code>forceHTML5</code> is <em>false</em>, <em>null</em>, zero (0), <code>AQ.DEFAULT</code> or not supplied,
+		AQ will use the Web Audio engine if it is available, falling back to HTML5 audio otherwise.</p>
+
+	<p><em>Return value</em></p>
+
+	<p>The return value of AQ.init() is the constant <code>AQ.WEB_AUDIO</code> if the engine is using the Web Audio API,
+		<code>AQ.HTML5_AUDIO</code> for HTML5 audio, or <code>AQ.ERROR</code> if an error occurs during initialization.
+	</p>
+
+	<p>If initialization fails, subsequent calls to any other API function
+		will silently return the constant <code>AQ.ERROR</code>.</p>
+
+	<p><em>Example</em></p>
+
+	<p>The following call to AQ.init() specifies a default audio directory in the application root,
+		three default file types in priority order, and a crude alert handler.</p>
+
+	<p><code>var result; // for later inspection<br/><br/>
+		result = AQ.init(<br/>
+		{<br>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>defaultPath: "audio/",<br/>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>defaultFileTypes: [ "ogg", "mp3", "wav" ],<br/>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>onAlert: function (str) {<br/>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>window.alert(str);<br/>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>}<br/>
+		});</code></p>
+</div>
+
+<div class="section">
+	<p id="load" class="subhead"><strong>AQ.load ( name, params )</strong></p>
+
+	<p>AQ.load() asynchronously loads an audio file.</p>
+
+	<p>Parameters:</p>
+	<ol>
+		<li>filename : <em>string</em></li>
+		<li>(optional) params : <em>object</em></li>
+	</ol>
+	<p>Returns:</p>
+	<ul>
+		<li><em>string</em>, <code>AQ.DONE</code> or <code>AQ.ERROR</code></li>
+	</ul>
+
+	<p>The required <em>filename</em> parameter sould be the case-sensitive name of the audio file to be loaded,
+		<span style="text-decoration: underline;">not including</span> a path specifier or file extension.</p>
+
+	<p>Examples: "beep", "piano_c4"</p>
+
+	<p>The optional <em>params</em> object can contain any of the following properties:</p>
+
+	<ul>
+		<li><code>.path</code> : <em>string</em></li>
+		<li><code>.autoplay</code> : <em>boolean</em></li>
+		<li><code>.lock</code> : <em>boolean</em></li>
+		<li><code>.volume</code> : <em>float</em></li>
+		<!--
+			<li><code>.start</code> <em>integer</em></li>
+			<li><code>.end</code> <em>integer</em></li>
+		-->
+		<li><code>.loop</code> : <em>boolean</em></li>
+		<li><code>.onLoad</code> : <em>function</em></li>
+		<li><code>.onDone</code> : <em>function</em></li>
+		<li><code>.data</code> : any Javascript data type</li>
+	</ul>
+
+	<p><code>.path</code></p>
+
+	<p>The optional <code>.path</code> string is the case-sensitive pathname to the directory
+		containing the <em>name</em> file. The path can be either relative to the directory containing the aq.js script
+		file, or an absolute, fully-qualified pathname.</p>
+
+	<p>If <code>.path</code> is <code>AQ.DEFAULT</code> or not specified, the default path defined by <a href="#init">AQ.init()</a>
+		is used.
+		Non-string values will cause an error.</p>
+
+	<p><code>.autoplay</code></p>
+
+	<p>If the optional <code>.autoplay</code> property is <em>true</em>, the loaded buffer begins playback immediately
+		after loading.
+		If <code>.autoplay</code> is <em>false</em>, <code>AQ.DEFAULT</code> or not specified, the buffer loads without
+		playing.</p>
+
+	<p><code>.lock</code></p>
+
+	<p>If <code>.lock</code> is <em>true</em>, the AQ engine will attempt to keep the loaded buffer available for the
+		life
+		of the application. If <code>.lock</code> is <em>false</em>, <code>AQ.DEFAULT</code> or not specified, the
+		buffer may be released to make
+		room for other resources as needed.</p>
+
+	<p><code>.volume</code></p>
+
+	<p>The optional <code>.volume</code> float specifies the volume level at which the loaded buffer will be heard on
+		subsequent playback.
+		It should be a value between 0.0 (muted) and 1.0 (maximum). Values outside this range are clamped.</p>
+
+	<p>If <code>.volume</code> is <code>AQ.DEFAULT</code> or not specified, the default value (0.5, 50% of maximum) is
+		used.
+		Non-numeric values will cause an error. </p>
+
+	<!--
+	<p><code>.start</code></p>
+
+	<p>The optional <code>.start</code> integer specifies the time (in millseconds) at which subsequent playback of the buffer will begin.
+	If <code>.start</code> is <code>AQ.DEFAULT</code>, negative, zero or not specified, playback starts at the beginning of the buffer.
+	If <code>.start</code> is equal to or greater than the total length of the buffer, or non-numeric, an error occurs.</p>
+
+	<p><code>.end</code></p>
+
+	<p>The optional <code>.end</code> integer specifies the time (in millseconds) at which subsequent playback of the buffer will end.
+	If <code>.end</code> is <code>AQ.DEFAULT</code>, greater than the length of the buffer, or not specified, playback concludes at the end of the buffer.
+	If <code>.end</code> is non-numeric, negative, zero, or less than or equal to <code>.start</code> (when specified), an error occurs.</p>
+	-->
+
+	<p><code>.loop</code></p>
+
+	<p>If the optional <code>.loop</code> property is <em>true</em>, the loaded buffer will loop continuously on
+		subsequent playback.
+		<!--
+		The loop starts at the beginning of the buffer and concludes at the end, unless valid <code>start</code> and/or <code>end</code> properties
+		have been specified (see above).
+		-->
+		If <code>.loop</code> is <em>false</em>, <code>AQ.DEFAULT</code> or not specified, the buffer plays only once.
+	</p>
+
+	<p><code>.onLoad</code></p>
+
+	<p>The optional <code>.onLoad</code> function is called when the file buffer is done loading.</p>
+
+	<p>The function specified by <code>.onLoad</code> should accept a single parameter. The passed parameter will be
+		<em>filename</em>
+		unless another value is specified in the <code>.data</code> property (see below).</p>
+
+	<p>If <code>.onLoad</code> is <code>AQ.DEFAULT</code> or not specified, no function call is executed.
+		An error occurs if <code>.onLoad</code> is not a valid function reference.</p>
+
+	<p><code>.onDone</code></p>
+
+	<p>The optional <code>.onDone</code> function is called when subsequent playback of the loaded buffer concludes.</p>
+	<!--, or at the end of each loop if the <code>loop</code> property was specified (see above).-->
+
+	<p>The function specified by <code>.onDone</code> should accept a single parameter. The passed parameter will <em>filename</em>
+		unless another value is specified in the <code>.data</code> property (see below).</p>
+
+	<p>If <code>onEnd</code> is <code>AQ.DEFAULT</code> or not specified, no function call is executed.
+		An error occurs if <code>.onDone</code> is not a valid function reference.</p>
+
+	<p>NOTE: The <code>.onDone</code> function is <em>not</em> called if playback is paused with <a href="#pause">AQ.pause()</a>,
+		or stopped with <a href="#stop">AQ.stop()</a>.</p>
+
+	<p><code>.data</code></p>
+
+	<p>The optional <code>.data</code> value is passed to the function specified by the <code>.onLoad</code> and/or
+		<code>.onDone</code> properties, if present (see above).
+		If no <code>.onLoad</code> or <code>.onDone</code> function is specified, <code>.data</code> is ignored.</p>
+
+	<p><em>Return value</em></p>
+
+	<p>If the <b>.autoload</b> property in <b>params</b> is <em>true</em>, AQ.load() returns a string uniquely
+		identifying the channel being played.
+		This identifier can be used for subsequent calls to <a href="#pause">AQ.pause</a>() and
+		<a href="#stop">AQ.stop</a>().</p>
+
+	<p>If <b>.autoload</b> was not specified, AQ.load() returns <b>PS.DONE</b> on a successful load, otherwise <b>PS.ERROR</b>.
+	</p>
+
+	<p><em>Examples</em></p>
+
+	<p>Load an audio file, using all default options.</p>
+
+	<p><code>AQ.load( "beep" );</code></p>
+
+	<p>Load and immediately play an audio file at maximum volume.</p>
+
+	<p><code>AQ.load( "scream", {<br/>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>autoplay: true,<br/>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>volume: 1.0<br/>
+		} );</code></p>
+
+</div>
+
+<div class="section">
+	<p id="play" class="subhead"><strong>AQ.play ( filename, params )</strong></p>
+
+	<p>AQ.play() plays an audio file, automatically loading it first if necessary.</p>
+
+	<p>Parameters:</p>
+	<ol>
+		<li>buffer: <em>string</em></li>
+		<li>(optional) params : <em>object</em></li>
+	</ol>
+	<p>Returns:</p>
+	<ul>
+		<li><em>string</em> or <code>AQ.ERROR</code></li>
+	</ul>
+
+	<p>The required <em>filename</em> parameter sould be the case-sensitive name of the audio file to be loaded,
+		<span style="text-decoration: underline;">not including</span> a path specifier or file extension.</p>
+
+	<p>Examples: "beep", "piano_c4"</p>
+
+	<p>The optional <em>params</em> object can contain any of the following properties:</p>
+
+	<ul>
+
+		<li><code>.volume</code> : <em>float</em></li>
+		<!--
+			<li><code>.start</code> : <em>integer</em></li>
+			<li><code>.end</code> : <em>integer</em></li>
+		-->
+		<li><code>.loop</code> : <em>boolean</em></li>
+		<li><code>.onDone</code> : <em>function</em></li>
+		<li><code>.data</code> : any Javascript data type</li>
+	</ul>
+
+	<p><code>.volume</code></p>
+
+	<p>The optional <code>.volume</code> float specifies the volume level at which the loaded buffer will be heard on
+		subsequent playbacks.
+		It should be a value between 0.0 (muted) and 1.0 (maximum). Values outside this range are clamped.</p>
+
+	<p>If <code>.volume</code> is <code>AQ.DEFAULT</code> or not specified, the default value (0.5, 50% of maximum) is
+		used. Non-numeric values will cause an error.</p>
+
+	<!--
+	<p><code>.start</code></p>
+
+	<p>The optional <code>.start</code> integer specifies the time (in millseconds) at which subsequent playback of the buffer will begin.
+	If <code>.start</code> is not specified, negative or zero, playback starts at the beginning of the buffer.
+	If <code>.start</code> is equal to or greater than the total length of the buffer, or non-numeric, an error occurs.</p>
+
+	<p><code>.end</code></p>
+
+	<p>The optional <code>.end</code> integer specifies the time (in millseconds) at which subsequent playback of the buffer will end.
+	If <code>.end</code> is not specified, or greater than the length of the buffer, playback concludes at the end of the file buffer.
+	If <code>.end</code> is non-numeric, negative, zero, or less than or equal to <code>.start</code> (when specified), an error occurs.</p>
+	-->
+
+	<p><code>.loop</code></p>
+
+	<p>If the optional <code>.loop</code> property is <em>true</em>, the loaded buffer will loop continuously on
+		subsequent playback.
+		<!--
+		The loop starts at the beginning of the file buffer and concludes at the end, unless valid <code>start</code> and/or <code>end</code> properties
+		have been specified (see above).
+		-->
+		If <code>.loop</code> is <em>false</em>, <code>AQ.DEFAULT</code> or not specified, the buffer plays only once.
+	</p>
+
+	<p><code>.onDone</code></p>
+
+	<p>The optional <code>.onDone</code> function is called when playback of the loaded buffer concludes.</p>
+	<!--, or at the end of each loop if the <code>loop</code> property was specified (see above).-->
+
+	<p>The function specified by <code>.onDone</code> should accept a single parameter. The passed parameter will be
+		<em>filename</em>
+		unless another value is specified in the <code>.data</code> property (see below).</p>
+
+	<p>If <code>.onDone</code> is <code>AQ.DEFAULT</code> or not specified, no function call is executed.
+		An error occurs if <code>.onDone</code> is not a valid function reference.</p>
+
+	<p>NOTE: The <code>.onDone</code> function is <em>not</em> called if playback is paused with <a href="#pause">AQ.pause()</a>,
+		or stopped with <a href="#stop">AQ.stop()</a>.</p>
+
+	<p><code>.data</code></p>
+
+	<p>The optional <code>.data</code> value (which can be any Javascript data type) is passed to the function specified
+		by <code>.onDone</code> (see above).
+		If no <code>.onDone</code> function is specified, <code>.data</code> is ignored.</p>
+
+	<p><em>Return value</em></p>
+
+	<p>The return value of AQ.play() is a string that uniquely identifies the playback channel, or AQ.ERROR if the call
+		fails.</p>
+
+	<p><em>Examples</em></p>
+
+	<p>Play a sound using all default parameters, saving the playback channel for later reference.</p>
+
+	<p><code>var channel;<br/><br/>
+		channel = AQ.play( "beep" );<br/>
+	</code></p>
+
+	<p>Loop a sound at maximum volume.</p>
+
+	<p><code>var channel;<br/><br/>
+		channel = AQ.play( "scream", {<br/>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>loop : true,<br/>
+		<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>volume : 1.0<br/>
+		});</code></p>
+
+</div>
+
+<div class="section">
+	<p id="pause" class="subhead"><strong>AQ.pause ( channel_id )</strong></p>
+
+	<p>AQ.pause() pauses or unpauses playback of an audio channel.</p>
+
+	<p>Parameters:</p>
+	<ol>
+		<li>channel : <em>string</em></li>
+	</ol>
+	<p>Returns:</p>
+	<ul>
+		<li><em>string</em> or <code>AQ.ERROR</code></li>
+	</ul>
+
+	<p>The required <em>channel</em> string should be a channel identifier returned by a previous call to
+		<a href="#play">AQ.play()</a> or <a href="#pause">AQ.pause()</a>.</p>
+
+	<p>If the channel specified by <em>channel</em> is playing when AQ.pause() is called, playback immediately stops.
+	</p>
+
+	<p>If the channel was previously paused by a call to AQ.pause(), it immediately resumes playback at the location
+		where it was paused.</p>
+
+	<p>If AQ.pause() is called on a non-playing channel that was not previously paused, nothing happens.</p>
+
+	<p><em>Return value</em></p>
+
+	<p>The return value of AQ.pause() is a string that uniquely identifies the paused/resumed channel, or AQ.ERROR if
+		the call fails.</p>
+
+	<p><em>Example</em></p>
+
+	<p>Pause a channel returned by a previous call to <a href="#play">AQ.play()</a>.</p>
+
+	<p><code>AQ.pause( channel );</code></p>
+
+</div>
+
+<div class="section">
+	<p id="stop" class="subhead"><strong>AQ.stop ( channel )</strong></p>
+
+	<p>AQ.stop() permanently stops playback of an audio channel.</p>
+
+	<p>Parameters:</p>
+	<ol>
+		<li>channel : <em>string</em></li>
+	</ol>
+	<p>Returns:</p>
+	<ul>
+		<li><code>AQ.DONE</code> or <code>AQ.ERROR</code></li>
+	</ul>
+
+	<p>The required <em>channel</em> string should be a channel identifier returned by a previous call to
+		<a href="#play">AQ.play</a>() or <a href="#pause">AQ.pause</a>().</p>
+
+	<p>If the channel specified by <em>channel</em> is playing when AQ.stop() is called, playback immediately stops.</p>
+
+	<p>If AQ.stop() is called on a channel previously paused by a call to <a href="#pause">AQ.pause()</a>, the pause
+		location of the channel is reset to the beginning of the sound file.
+		A subsequent call to <a href="#pause">AQ.pause()</a> resumes playback from that point.</p>
+
+	<p><em>Return value</em></p>
+
+	<p>The return value of AQ.stop() is AQ.DONE if the call succeeds, or AQ.ERROR if it fails.</p>
+
+	<p><em>Example</em></p>
+
+	<p>Stop a channel returned by a previous call to <a href="#play">AQ.play()</a>.</p>
+
+	<p><code>AQ.stop( channel );</code></p>
+
+</div>
+
+<div id="footer">
+	<p>
+		Interactive Media and Game Development<br/>
+		Worcester Polytechnic Institute<br/>
+		100 Institute Road, Worcester, MA 01609 USA<br/>
+		<a href="http://imgd.wpi.edu">imgd.wpi.edu</a>
+	</p>
+</div>
+
+</div>
+</body>
+</html>

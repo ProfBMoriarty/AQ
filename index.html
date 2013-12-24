@@ -1,0 +1,60 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<title>AQ | Home</title>
+	<meta charset="utf-8"/>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+	<meta name="description" content="AQ | Home"/>
+	<meta name="keywords" content="aq, audio, sound, engine, html, html5, web, api, javascript, wpi"/>
+	<meta name="viewport" content="width=device-width; initial-scale=1.0"/>
+	<link rel="shortcut icon" href="http://users.wpi.edu/~bmoriarty/aq/favicon.png" />
+	<link rel="apple-touch-icon" href="http://users.wpi.edu/~bmoriarty/aq/apple-touch-icon.png" />
+	<link rel="stylesheet" href="style.css" type="text/css">
+</head>
+<body>
+<div id="header">
+	<img src="images/logo.png" style="margin-top: 32px;" alt="[AQ logo]">
+	<ul id="nav">
+		<li><a href="index.html">Home</a></li>
+		<li><a href="download.html">Download</a></li>
+		<li><a href="setup.html">Setup</a></li>
+		<li><a href="api.html">API</a></li>
+		<li><a href="examples.html">Examples</a></li>
+		<li><a href="links.html">Links</a></li>
+	</ul>
+</div>
+
+<div id="main">
+	<p><strong>Welcome to AQ</strong></p>
+
+	<p>AQ is a lightweight, robust audio engine for HTML5.
+		It was created in 2013 by Brian Moriarty as a component of the
+		<a href="http://www.perlenspiel.org">Perlenspiel</a> 3 game engine.</p>
+
+	<p>The AQ engine is especially good at detecting and reporting errors.
+		If an audio call fails for some reason, AQ can usually help you figure out why.
+		You can easily configure AQ to display error and debugging strings
+		through your own application's messaging system.</p>
+
+	<p>AQ resides in a single .js file. It is entirely self-contained,
+		and doesn't require JQuery or any other external libraries.</p>
+
+	<p>AQ uses the high-performance Web Audio API on browsers that support it,
+		falling back gracefully to standard HTML5 audio on those that don't.
+		Antique browsers that do not fully support HTML5 cannot be used with AQ.</p>
+
+	<p>Grateful acknowledgement is made to James Simpson, whose
+		<a href="http://goldfirestudios.com/blog/104/howler.js-Modern-Web-Audio-Javascript-Library">howler.js</a>
+		project served as an important resource and inspiration for AQ.</p>
+</div>
+
+<div id="footer">
+	<p>
+		Interactive Media and Game Development<br/>
+		Worcester Polytechnic Institute<br/>
+		100 Institute Road, Worcester, MA 01609 USA<br/>
+		<a href="http://imgd.wpi.edu">imgd.wpi.edu</a>
+	</p>
+</div>
+</body>
+</html>

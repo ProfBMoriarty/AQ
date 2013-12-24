@@ -1,0 +1,83 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<title>AQ | Examples</title>
+	<meta charset="utf-8"/>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+	<meta name="description" content="AQ | Examples"/>
+	<meta name="keywords" content="aq, audio, sound, engine, html, html5, web, api, javascript, wpi"/>
+	<meta name="viewport" content="width=device-width; initial-scale=1.0"/>
+	<link rel="shortcut icon" href="http://users.wpi.edu/~bmoriarty/aq/favicon.png" />
+	<link rel="apple-touch-icon" href="http://users.wpi.edu/~bmoriarty/aq/apple-touch-icon.png" />
+	<link rel="stylesheet" href="style.css" type="text/css">
+</head>
+<body>
+<div id="header">
+	<img src="images/logo.png" style="margin-top: 32px;" alt="[AQ logo]">
+	<ul id="nav">
+		<li><a href="index.html">Home</a></li>
+		<li><a href="download.html">Download</a></li>
+		<li><a href="setup.html">Setup</a></li>
+		<li><a href="api.html">API</a></li>
+		<li><a href="examples.html">Examples</a></li>
+		<li><a href="links.html">Links</a></li>
+	</ul>
+</div>
+
+<div id="main">
+
+	<p><strong>Examples</strong></p>
+
+	<p>This page provides examples of how to use the AQ engine.</p>
+
+	<div class="section">
+		<p><strong>Load and immediately play a sound</strong></p>
+
+		<p>This code initializes the AQ engine, loads a sound named "quack" and plays it immediately.
+			The file buffer is saved for later reference.</p>
+
+		<p>The call to AQ.init() specifies that the "quack" sound is located in a sub-directory called
+			<code>audio/</code> located
+			in the same directory as the aq.js script, and that the sound is available in .ogg, .mp3 and .wav formats. A
+			simple
+			alert handler is provided.</p>
+
+		<p>The AQ.load() call loads the sound. The <code>autoplay</code> option in the parameter object tells the engine
+			to
+			play the sound immediately after loading. The return value, <em>buffer</em>, will contain a string uniquely
+			identifying the file buffer
+			associated with the "quack" sound. This string can be used in any subsequent calls to AQ.play().</p>
+
+		<p><code>var result, buffer;<br/><br/>
+			result = AQ.init(<br/>
+			{<br>
+			<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>defaultPath: "audio/",<br/>
+			<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>defaultFileTypes: [ "ogg", "mp3", "wav" ],<br/>
+			<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>onAlert: function (str) {<br/>
+			<span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>window.alert(str);<br/>
+			<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>}<br/>
+			});<br/><br/>
+
+			buffer = AQ.load("quack", { autoplay: true } );</code></p>
+
+		<p>Note that AQ.load() only returns a buffer id, <em>not</em> a channel id. This means you can't control a sound
+			played using AQ.load() using any
+			of the AQ functions that expect a channel id, such as AQ.pause() and AQ.stop(). If you need this
+			functionality, call AS.load() without the
+			<code>autoplay</code> option, and use the returned buffer id to call AQ.play(), which does return a channel
+			id.</p>
+
+	</div>
+
+</div>
+
+<div id="footer">
+	<p>
+		Interactive Media and Game Development<br/>
+		Worcester Polytechnic Institute<br/>
+		100 Institute Road, Worcester, MA 01609 USA<br/>
+		<a href="http://imgd.wpi.edu">imgd.wpi.edu</a>
+	</p>
+</div>
+</body>
+</html>

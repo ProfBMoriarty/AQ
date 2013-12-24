@@ -1,0 +1,125 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<title>AQ | Setup</title>
+	<meta charset="utf-8"/>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+	<meta name="description" content="AQ | Home"/>
+	<meta name="keywords" content="aq, audio, sound, engine, html, html5, web, api, javascript, wpi"/>
+	<meta name="viewport" content="width=device-width; initial-scale=1.0"/>
+	<link rel="shortcut icon" href="http://users.wpi.edu/~bmoriarty/aq/favicon.png" />
+	<link rel="apple-touch-icon" href="http://users.wpi.edu/~bmoriarty/aq/apple-touch-icon.png" />
+	<link rel="stylesheet" href="style.css" type="text/css">
+</head>
+<body>
+<div id="header">
+	<img src="images/logo.png" style="margin-top: 32px;" alt="[AQ logo]">
+	<ul id="nav">
+		<li><a href="index.html">Home</a></li>
+		<li><a href="download.html">Download</a></li>
+		<li><a href="setup.html">Setup</a></li>
+		<li><a href="api.html">API</a></li>
+		<li><a href="examples.html">Examples</a></li>
+		<li><a href="links.html">Links</a></li>
+	</ul>
+</div>
+
+<div id="main">
+	<p><strong>Setup</strong></p>
+
+	<p>This page explains how to setup an HTML5 application for use with the AQ audio engine.</p>
+
+	<ul>
+		<li><a href="#install">Installation</a></li>
+		<li><a href="#prop">Preparing audio files</a></li>
+		<li><a href="#security">Important security issues</a></li>
+		<li><a href="#ie">Internet Explorer</a></li>
+	</ul>
+
+	<div class="section" name="install">
+		<p><strong>Installation</strong></p>
+
+		<p>To use AQ in your HTML5 project, visit the <a href="download.html">download</a> page and get the .zip file
+			containing the current release of AQ.</p>
+
+		<p>Copy the aq1.0.js file into the same directory as your other scripts.</p>
+
+		<p>Add the following code to your HTML5 page:</p>
+
+		<p><code><span>&lt;</span>script src="aq.js"
+			type="text/javascript"<span>&gt;</span><span>&lt;</span>/script<span>&gt;</span></code></p>
+
+		<p>This script reference can be placed either in the <code><span>&lt;</span>head<span>&gt;</span></code> or
+			<code><span>&lt;</span>body<span>&gt;</span></code> section of the page, but it must appear <em>before</em>
+			any script(s) that call the AQ engine.</p>
+
+		<p>The AQ engine must be initialized before it can be used.
+			Details are available in the API documentation for <a href="api.html#init">AQ.init()</a>.</p>
+	</div>
+
+	<div class="section" name="prep">
+		<p><strong>Preparing audio files</strong></p>
+
+		<p>You <em>must</em> provide a 16-bit .wav file (44.1<span>&nbsp;</span>kHz or 22.05<span>&nbsp;</span>kHz, mono
+			or stereo) for every sound
+			used by your application. </p>
+
+		<p>However, for better performance, it is strongly recommended that you also provide .ogg and .mp3 versions of
+			the .wav file, stored in the same directory.
+			Most browsers can handle at least one of these compressed formats, which load much faster.
+			Encode at whatever bitrate you feel is adequate. For stereo music, I recommend at least
+			192<span>&nbsp;</span>kbps
+			for .mp3 files, and 128<span>&nbsp;</span>kbps for .ogg files. Lower rates may be adequate for voices and
+			sound effects.</p>
+
+		<p>You may also want to provide an .opus file, as this will (hopefully) soon become the standard for all
+			browsers.</p>
+
+		<p>You can specify which file format(s) are available and should be preferred by AQ when loading.
+			Details are available in the API documentation for <a href="api.html#load">AQ.load()</a>.</p>
+	</div>
+
+	<div class="section" name="security">
+		<p><strong>Important security issues</strong></p>
+
+		<p>Webkit-based browsers, such as Google Chrome and Apple Safari, are picky about security.
+			By default, they will not load resources (including audio files) that (1) do not reside on an actual HTTP
+			server,
+			and (2) do not share the root filepath of any script that tries to access them.</p>
+
+		<p>This means that you have to install all of your scripts (including aq.js) and audio files on a live server,
+			and in the same root filepath, before you can test or deploy an application using Chrome and/or Safari.
+			(It's possible to reconfigure
+			these browsers to avoid this necessity, but I don't recommend it.)</p>
+
+		<p>A basic application directory might look like this:</p>
+
+		<p><code>/audio/</code>&nbsp;&nbsp; (a folder for your audio files)<br/>
+			<code>aq.js</code>&nbsp;&nbsp; (the AQ engine script)<br/>
+			<code>main.js</code>&nbsp;&nbsp; (your main application script)</p>
+
+		<p>Mozilla Firefox is much more lenient about security. Resource files don't need to be on a server, or share
+			the same root filepath.
+			This makes Firefox much easier to use for development. Unfortunately, Firefox doesn't support the Web Audio
+			API yet, although Mozilla has
+			announced its intention to begin supporting it in the near future.</p>
+	</div>
+
+	<div class="section" name="ie">
+		<p><strong>Internet Explorer</strong></p>
+		<p>Ignore it. Or detect it, and urge the hapless user to upgrade to a modern browser,
+			such as Chrome or Firefox.</p>
+	</div>
+
+</div>
+
+<div id="footer">
+	<p>
+		Interactive Media and Game Development<br/>
+		Worcester Polytechnic Institute<br/>
+		100 Institute Road, Worcester, MA 01609 USA<br/>
+		<a href="http://imgd.wpi.edu">imgd.wpi.edu</a>
+	</p>
+</div>
+</body>
+</html>
