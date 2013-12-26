@@ -133,9 +133,22 @@
 
 	<p><em>Return value</em></p>
 
-	<p>The return value of AQ.init() is the constant <code>AQ.WEB_AUDIO</code> if the engine is using the Web Audio API,
-		<code>AQ.HTML5_AUDIO</code> for HTML5 audio, or <code>AQ.ERROR</code> if an error occurs during initialization.
-	</p>
+	<p>The return value of AQ.init() is an <em>object</em> with the following properties:</p>
+
+	<ul>
+		<li><b>.engine</b> : <em>string</em></li>
+		<li><b>.major</b> : <em>number</em></li>
+		<li><b>.minor</b> : <em>number</em></li>
+		<li><b>.revision</b> : <em>number</em></li>
+		<li><b>.status</b> : <em>string</em></li>
+	</ul>
+
+	<p><b>.engine</b> is the name of the engine, usually the string “AQ”.</p>
+
+	<p><b>.major, .minor</b> and <b>.revision</b> identify the version number of the engine.<p>
+
+	<p><b>.status</b> will be the constant <code>AQ.WEB_AUDIO</code> if the engine is using the Web Audio API,
+		<code>AQ.HTML5_AUDIO</code> for HTML5 audio, or <code>AQ.ERROR</code> if an error occurs during initialization.</p>
 
 	<p>If initialization fails, subsequent calls to any other API function
 		will silently return the constant <code>AQ.ERROR</code>.</p>
@@ -258,8 +271,26 @@
 	<p>The optional <code>.onLoad</code> function is called when the file buffer is done loading.</p>
 
 	<p>The function specified by <code>.onLoad</code> should accept a single parameter. The passed parameter will be
-		<em>filename</em>
-		unless another value is specified in the <code>.data</code> property (see below).</p>
+		an <em>object</em> with the following properties:</p>
+
+	<ul>
+		<li><b>.channel</b> : <em>string</em></li>
+		<li><b>.name</b> : <em>string</em></li>
+		<li><b>.path</b> : <em>string</em></li>
+		<li><b>.duration</b> : <em>integer</em></li>
+		<li><b>.data</b> : a Javascript value</li>
+	</ul>
+
+	<p><b>.channel</b> is the channel id.</p>
+
+	<p><b>.name</b> is set to the <b>filename</b> parameter.</p>
+
+	<p><b>.path</b> is the complete pathname of the loaded file, including its file extension.</p>
+
+	<p><b>.duration</b> is the duration of the file in milliseconds.</p>
+
+	<p><b>.data</b> is the value specified in the <b>.data</b> property of the <b>params</b> object.
+		If no <b>.data</b> property was specified, <b>.data</b> is set to <b>filename</b>.</p>
 
 	<p>If <code>.onLoad</code> is <code>AQ.DEFAULT</code> or not specified, no function call is executed.
 		An error occurs if <code>.onLoad</code> is not a valid function reference.</p>
@@ -269,8 +300,27 @@
 	<p>The optional <code>.onDone</code> function is called when subsequent playback of the loaded buffer concludes.</p>
 	<!--, or at the end of each loop if the <code>loop</code> property was specified (see above).-->
 
-	<p>The function specified by <code>.onDone</code> should accept a single parameter. The passed parameter will <em>filename</em>
-		unless another value is specified in the <code>.data</code> property (see below).</p>
+	<p>The function specified by <code>.onDone</code> should accept a single parameter. The passed parameter will be
+		an <em>object</em> with the following properties:</p>
+
+	<ul>
+		<li><b>.channel</b> : <em>string</em></li>
+		<li><b>.name</b> : <em>string</em></li>
+		<li><b>.path</b> : <em>string</em></li>
+		<li><b>.duration</b> : <em>integer</em></li>
+		<li><b>.data</b> : a Javascript value</li>
+	</ul>
+
+	<p><b>.channel</b> is the channel id.</p>
+
+	<p><b>.name</b> is set to the <b>filename</b> parameter.</p>
+
+	<p><b>.path</b> is the complete pathname of the played file, including its file extension.</p>
+
+	<p><b>.duration</b> is the duration of the file in milliseconds.</p>
+
+	<p><b>.data</b> is the value specified in the <b>.data</b> property of the <b>params</b> object.
+		If no <b>.data</b> property was specified, <b>.data</b> is set to <b>filename</b>.</p>
 
 	<p>If <code>onEnd</code> is <code>AQ.DEFAULT</code> or not specified, no function call is executed.
 		An error occurs if <code>.onDone</code> is not a valid function reference.</p>
@@ -383,8 +433,26 @@
 	<!--, or at the end of each loop if the <code>loop</code> property was specified (see above).-->
 
 	<p>The function specified by <code>.onDone</code> should accept a single parameter. The passed parameter will be
-		<em>filename</em>
-		unless another value is specified in the <code>.data</code> property (see below).</p>
+		an <em>object</em> with the following properties:</p>
+
+	<ul>
+		<li><b>.channel</b> : <em>string</em></li>
+		<li><b>.name</b> : <em>string</em></li>
+		<li><b>.path</b> : <em>string</em></li>
+		<li><b>.duration</b> : <em>integer</em></li>
+		<li><b>.data</b> : a Javascript value</li>
+	</ul>
+
+	<p><b>.channel</b> is the channel id.</p>
+
+	<p><b>.name</b> is set to the <b>filename</b> parameter.</p>
+
+	<p><b>.path</b> is the complete pathname of the played file, including its file extension.</p>
+
+	<p><b>.duration</b> is the duration of the file in milliseconds.</p>
+
+	<p><b>.data</b> is the value specified in the <b>.data</b> property of the <b>params</b> object.
+		If no <b>.data</b> property was specified, <b>.data</b> is set to <b>filename</b>.</p>
 
 	<p>If <code>.onDone</code> is <code>AQ.DEFAULT</code> or not specified, no function call is executed.
 		An error occurs if <code>.onDone</code> is not a valid function reference.</p>
