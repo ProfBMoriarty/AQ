@@ -1787,7 +1787,7 @@ var AQ; // Global namespace for public API
 
 			if ( _MONITOR )
 			{
-				_debug( fn + "Loaded " + result.path + ", status = " + result.status );
+				_debug( fn + "Loaded " + params.pathname + ", status = " + result );
 			}
 
 			return result;
@@ -1840,7 +1840,7 @@ var AQ; // Global namespace for public API
 
 			if ( _MONITOR )
 			{
-				_debug( fn + "Played " + result.path + ", channel = " + result.channel );
+				_debug( fn + "Played " + params.pathname + ", channel = " + result );
 			}
 
 			return result;
