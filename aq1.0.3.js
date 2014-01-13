@@ -36,12 +36,13 @@ var AQ; // Global namespace for public API
 		loop : false,
 		lock : false,
 		onLoad : null,
+		onPlay : null,
 		onEnd : null,
 		data : 0
 	};
 
-	var _PREFIX_BUFFER = "buffer_";
-	var _PREFIX_CHANNEL = "channel_";
+	var _PREFIX_BUFFER = "bf_";
+	var _PREFIX_CHANNEL = "ch_";
 
 	// Channel modes
 
@@ -51,11 +52,11 @@ var AQ; // Global namespace for public API
 	var _CHANNEL_PLAYING = "PLAYING";
 	var _CHANNEL_PAUSED = "PAUSED";
 
-	/*
+	// Web Audio buffer states
+
 	var _WEBAUDIO_UNSCHEDULED_STATE = 0;
 	var _WEBAUDIO_SCHEDULED_STATE = 1;
 	var _WEBAUDIO_PLAYING_STATE = 2;
-	*/
 	var _WEBAUDIO_FINISHED_STATE = 3;
 
 	// These shared globals are set up by init()
@@ -83,19 +84,9 @@ var AQ; // Global namespace for public API
 	var _channelCnt = 0; // channels in use
 	var _channelID = 0; // unique channel id
 
-	var _buffers = []; // active buffer list
-	var _bufferID = 0; // unique buffer id
+	// Executive selector
 
-	// Web Audio API globals
-
-	var _context = null; // AudioContext
-
-	// executive functions
-
-	var _loadExec = null;
-	var _playExec = null;
-	var _pauseExec = null;
-	var _stopExec = null;
+	var _exec = null; // either _web or _html
 
 	// PRIVATE FUNCTIONS
 
@@ -129,6 +120,24 @@ var AQ; // Global namespace for public API
 		}
 
 		return type;
+	}
+
+	// _endEvent( event )
+	// Properly terminates a DOM event
+
+	function _endEvent ( event )
+	{
+		if ( event.stopPropagation )
+		{
+			event.stopPropagation();
+		}
+		else
+		{
+			event.cancelBubble = true;
+		}
+
+		event.returnValue = false;
+		return false;
 	}
 
 	// Report a debug string through user's onAlert function if available
@@ -543,6 +552,23 @@ var AQ; // Global namespace for public API
 			current.onLoad = val;
 		}
 
+		// check .onPlay property
+
+		val = changes.onPlay;
+		type = _typeOf( val );
+		if ( type !== "undefined" )
+		{
+			if ( val === AQ.DEFAULT )
+			{
+				val = _DEFAULT.onPlay;
+			}
+			else if ( type !== "function" )
+			{
+				return _error( fn + ".onPlay property not a function" );
+			}
+			current.onPlay = val;
+		}
+
 		// check .onEnd property
 
 		val = changes.onEnd;
@@ -576,904 +602,12 @@ var AQ; // Global namespace for public API
 		return AQ.DONE;
 	}
 
-	// -----------------
-	// Web Audio Support
-	// -----------------
-
-	function _stopChannel ( channel )
-	{
-		var source, type;
-
-		source = channel.source;
-		if ( source && ( source.playbackState !== _WEBAUDIO_FINISHED_STATE ) ) // if not finished, pause it
-		{
-			if ( channel.thandle )
-			{
-				window.clearTimeout( channel.thandle );
-				channel.thandle = null;
-			}
-
-			type = _typeOf ( source.stop );
-			if ( type !== "undefined" )
-			{
-				source.stop( 0 ); // this is the standard
-			}
-			else
-			{
-				source.noteOff( 0 ); // deprecated!
-			}
-		}
-		return AQ.DONE;
-	}
-
-	// Generate a channel id
-
-	function _assignChannel ()
-	{
-		var id;
-
-		_channelID += 1;
-		id = _PREFIX_CHANNEL + _channelID;
-		return id;
-	}
-
-	// _playBuffer()
-	// Play file in [buffer] with optional [offset]
-	// Returns channel id
-
-	function _playBuffer ( buffer, offset )
-	{
-		var fn, ctx, source, gainNode, duration, timeout, id, channel, type;
-
-		fn = "[_playBuffer] ";
-
-		ctx = _context;
-
-		source = ctx.createBufferSource();
-		if ( !source )
-		{
-			return _error( fn + "Invalid bufferSource" );
-		}
-		source.buffer = buffer.audio;
-
-		if ( ctx.createGain !== undefined )
-		{
-			gainNode = ctx.createGain();
-		}
-		else
-		{
-			gainNode = ctx.createGainNode();
-		}
-
-		if ( !gainNode )
-		{
-			return _error( fn + "Invalid gainNode" );
-		}
-
-		source.connect( gainNode );
-		gainNode.connect( ctx.destination );
-		gainNode.gain.value = buffer.params.volume;
-
-		if ( offset === undefined )
-		{
-			offset = 0;
-		}
-
-		// calc timeout
-
-		duration = buffer.audio.duration - offset;
-		timeout = Math.floor( duration * 1000 );
-
-		// get a unique channel id if none assigned
-
-		if ( !buffer.channel_id )
-		{
-			buffer.channel_id = _assignChannel();
-		}
-		id = buffer.channel_id;
-
-		channel = {
-			id : id,
-			buffer : buffer,
-			source : source,
-			gainNode : gainNode,
-			startTime : ctx.currentTime - offset, // fixes multiple pauses
-			pauseTime : 0, // non-zero if paused
-			endTime : -1, // -1 if no end time specified
-			status : _CHANNEL_PLAYING
-		};
-
-		// Establish timeout for .onDone handling
-		// Save handle for pause
-		// Make it a closure for channel identification
-
-		channel.thandle = window.setTimeout( function ()
-		{
-			var fn, len, i, channel, buffer, params, exec;
-
-			fn = "[Web Audio .onDone] ";
-
-			// find the channel
-
-			len = _channels.length;
-			for ( i = 0; i < len; i += 1 )
-			{
-				channel = _channels[ i ];
-				if ( channel.id === id ) // id obtained from the closure
-				{
-					if ( _MONITOR )
-					{
-						_debug( fn + "Ending " + id );
-					}
-
-					_stopChannel( channel );
-
-					// call user onDone function if valid
-
-					buffer = channel.buffer;
-					params = buffer.params;
-					exec = params.onDone;
-					if ( exec && ( typeof exec === "function" ) )
-					{
-						try
-						{
-							exec( {
-								channel : buffer.channel_id,
-								name : params.name,
-								path : params.pathname,
-								duration : buffer.duration,
-								data : params.data
-							} );
-						}
-						catch ( err )
-						{
-							_errorCatch( fn + ".onDone error [" + err.message + "]", err );
-						}
-					}
-
-					// delete the channel last (why? who knows?)
-
-					_channels.splice( i, 1 );
-
-					// restart if looping
-
-					if ( params.loop )
-					{
-						_playBuffer( buffer, 0 ); // fix offset later
-					}
-					return;
-				}
-			}
-
-			_error( fn + "Channel " + id + " not found" );
-
-		}, timeout );
-
-		// save the channel
-
-		_channels.push( channel );
-
-		// begin playback
-
-		type = _typeOf( source.start );
-		if ( type !== "undefined" )
-		{
-			source.start( 0, offset, duration );
-		}
-		else
-		{
-			source.noteGrainOn( 0, offset, duration ); // this call is deprecated!
-		}
-
-		return id;
-	}
-
-	// Load file per [params]
-	// Return assigned channel id
-
-	function _loadWebAudio ( params )
-	{
-		var fn, len, i, buffer, id, request;
-
-		fn = "[_loadWebAudio] ";
-
-		// see if this file is already loaded
-
-		len = _buffers.length;
-		for ( i = 0; i < len; i += 1 )
-		{
-			buffer = _buffers[ i ];
-			if ( buffer.params.pathname === params.pathname ) // already loaded
-			{
-				if ( _MONITOR )
-				{
-					_debug( fn + params.pathname + " already loaded in " + buffer.id );
-				}
-				return buffer.channel_id;
-			}
-		}
-
-		// set up a new buffer record
-
-		_bufferID += 1; // unique id
-		id = _PREFIX_BUFFER + _bufferID;
-
-		buffer = {
-			id : id,
-			channel_id : _assignChannel(), // pre-assign the channel id
-			audio : null, // will get this when loaded
-			duration : 0, // this too
-			params : params
-		};
-
-//		_buffers.push( buffer ); // save buffer object now?
-
-		if ( _MONITOR )
-		{
-			_debug( fn + "Creating " + buffer.id + " for " + params.pathname );
-		}
-
-		request = new XMLHttpRequest();
-		if ( !request )
-		{
-			return _error( fn + "XMLHttpRequest error" );
-		}
-		request.open( 'GET', params.pathname, true );
-		request.responseType = "arraybuffer";
-		request.onload = function ()
-		{
-			if ( _MONITOR )
-			{
-				_debug( fn + "Loaded " + params.pathname + " into " + buffer.id );
-			}
-			_context.decodeAudioData( request.response,
-				function ( audio ) // on successful load
-				{
-					var exec;
-
-					if ( _MONITOR )
-					{
-						_debug( fn + "Decoded " + params.pathname + " in " + buffer.id );
-					}
-
-					buffer.audio = audio; // save decoded audio in buffer
-					buffer.duration = Math.floor( audio.duration * 1000 ); // convert to milliseconds
-					_buffers.push( buffer ); // save buffer object
-
-					// Call .onLoad function if present
-
-					exec = params.onLoad;
-					if ( exec && ( typeof exec === "function" ) )
-					{
-						params.onLoad = null; // make sure it doesn't get called again!
-						if ( _MONITOR )
-						{
-							_debug( fn + "Calling .onLoad for " + buffer.id );
-						}
-						try
-						{
-							exec( {
-								channel: buffer.channel_id,
-								name : params.name,
-								path : params.pathname,
-								duration: buffer.duration,
-								data : params.data
-							} );
-						}
-						catch ( err )
-						{
-							_errorCatch( fn + ".onLoad failed @ " + params.pathname + " [" + err.message + "]", err );
-						}
-					}
-
-					// Play immediately?
-
-					if ( buffer.params.autoplay )
-					{
-						if ( _MONITOR )
-						{
-							_debug( fn + "Autoplaying " + buffer.id );
-						}
-						_playBuffer( buffer );
-					}
-
-				},
-
-				function () // on error
-				{
-					_error( fn + "Error loading " + params.pathname );
-				} );
-		};
-
-		try
-		{
-			request.send();
-		}
-		catch ( err2 )
-		{
-			return _errorCatch( fn + "XMLHttpRequest failed @ " + params.pathname + " [" + err2.message + "]", err2 );
-		}
-
-		return buffer.channel_id;
-	}
-
-	function _playWebAudio ( params )
-	{
-		var len, i, buffer;
-
-		len = _buffers.length;
-		for ( i = 0; i < len; i += 1 )
-		{
-			buffer = _buffers[ i ];
-			if ( buffer.params.pathname === params.pathname ) // found it!
-			{
-				return _playBuffer( buffer );
-			}
-		}
-
-		params.autoplay = true;
-		return _loadWebAudio( params );
-	}
-
-	// _pauseWebAudio
-	// [id] is a channel id
-	// Returns same id if paused, NEW id if restarted, else silent AQ.ERROR
-
-	function _pauseWebAudio ( id )
-	{
-		var len, i, channel, buffer, source, ptime, type;
-
-		len = _channels.length;
-		for ( i = 0; i < len; i += 1 )
-		{
-			channel = _channels[i];
-			if ( channel.id === id )
-			{
-				buffer = channel.buffer;
-				source = channel.source;
-				ptime = channel.pauseTime;
-				if ( ( ptime > 0 ) && ( channel.status === _CHANNEL_PAUSED ) ) // if paused, restart
-				{
-					_channels.splice( i, 1 ); // remove this channel
-					return _playBuffer( buffer, ptime ); // restart on new channel
-				}
-
-				// if channel not finished, stop it
-
-				// stop the ending function from being called!
-
-				if ( channel.thandle )
-				{
-					window.clearTimeout( channel.thandle );
-					channel.thandle = null;
-				}
-
-				if ( source && ( source.playbackState !== _WEBAUDIO_FINISHED_STATE ) )
-				{
-					ptime = _context.currentTime - channel.startTime;
-					ptime = ptime % buffer.audio.duration; // prevents overflow?
-					channel.pauseTime = ptime; // save pause time
-					channel.status = _CHANNEL_PAUSED;
-
-					type = _typeOf ( source.stop );
-					if ( type !== "undefined" )
-					{
-						source.stop( 0 ); // this is the standard
-					}
-					else
-					{
-						source.noteOff( 0 ); // deprecated!
-					}
-				}
-				else
-				{
-					_channels.splice( i, 1 ); // channel is finished, so delete it
-				}
-				return id;
-			}
-		}
-
-		return AQ.ERROR; // fail silently
-	}
-
-	function _stopWebAudio ( id )
-	{
-		var len, i, channel;
-
-		len = _channels.length;
-		for ( i = 0; i < len; i += 1 )
-		{
-			channel = _channels[ i ];
-			if ( channel.id === id )
-			{
-				_stopChannel( channel );
-				_channels.splice( i, 1 ); // delete this channel
-				return AQ.DONE;
-			}
-		}
-
-		return AQ.ERROR; // fail silently
-	}
-
-	function _initWebAudio ()
-	{
-		// set up executives
-
-		_loadExec = _loadWebAudio;
-		_playExec = _playWebAudio;
-		_pauseExec = _pauseWebAudio;
-		_stopExec = _stopWebAudio;
-
-		return AQ.WEB_AUDIO;
-	}
-
-	// --------------------
-	// HTML5 Audio handlers
-	// --------------------
-
-	// HTML5 Audio onError handler
-
-	function _onErrorHTML5 ( event )
-	{
-		var fn, i, channel, c, str;
-
-		fn = "[_onErrorHTML5] ";
-
-		i = this.getAttribute( "data-channel" );
-		i = parseInt( i, 10 );
-		channel = _channels[ i ];
-
-		c = event.target.error.code;
-		switch ( c )
-		{
-			case 1:
-				str = "Playback aborted"; // "MEDIA_ERR_ABORTED";
-				break;
-			case 2:
-				str = "Network failure"; // "MEDIA_ERR_NETWORK";
-				break;
-			case 3:
-				str = "Source decode failed"; // "MEDIA_ERR_DECODE";
-				break;
-			case 4:
-				str = "Invalid source file"; // "MEDIA_ERR_SRC_NOT_SUPPORTED";
-				break;
-			default:
-				str = "Unknown"; // "UNKNOWN"
-				break;
-		}
-
-		return _error( fn + "Audio error " + c + " [" + str + "] : " + channel.params.pathname );
-	}
-
-	// HTML5 Audio onStalled event handler
-	// Called by browser if file stalls during loading
-
-	function _onStalledHTML5 ()
-	{
-		var fn, i, channel;
-
-		fn = "[_onStalledHTML5] ";
-
-		// Android always seems to stall ...
-
-		if ( _MONITOR )
-		{
-			// Retrieve associated channel index
-
-			i = this.getAttribute( "data-channel" );
-			i = parseInt( i, 10 );
-			channel = _channels[ i ];
-
-			_debug( fn + "Channel " + channel.id + " stalled: " + channel.params.pathname );
-		}
-	}
-
-	// _playHTLM5Channel()
-	// Plays [channel] using [params] parameters
-
-	function _playHTML5Channel ( channel, params )
-	{
-		var audio, val, type;
-
-		if ( _MONITOR )
-		{
-			_debug( "Playing " + channel.id + ": " + params.pathname );
-		}
-
-		channel.status = _CHANNEL_PLAYING;
-		audio = channel.audio;
-
-		type = _typeOf ( params );
-		if ( type === "object" )
-		{
-			val = params.volume;
-			type = _typeOf ( val );
-			if ( type !== "undefined" )
-			{
-				channel.params.volume = val;
-				audio.volume = val;
-			}
-
-			val = params.loop;
-			type = _typeOf ( val );
-			if ( type !== "undefined" )
-			{
-				channel.params.loop = val;
-				audio.loop = val; // must do this manually?
-			}
-
-			val = params.onDone;
-			type = _typeOf ( val );
-			if ( type !== "undefined" )
-			{
-				channel.params.onDone = val;
-			}
-
-			val = params.userData;
-			type = _typeOf ( val );
-			if ( type !== "undefined" )
-			{
-				channel.params.userData = val;
-			}
-
-			val = params.lock;
-			type = _typeOf ( val );
-			if ( type !== "undefined" )
-			{
-				channel.params.lock = val;
-			}
-		}
-
-		audio.play();
-	}
-
-	// HTML5 Audio onLoad handler
-
-	function _onLoadHTML5 ()
-	{
-		var fn, i, channel, params, exec;
-
-		fn = "[_onLoadHTML5] ";
-
-		i = this.getAttribute( "data-channel" );
-		i = parseInt( i, 10 );
-		channel = _channels[ i ];
-		params = channel.params;
-
-		if ( _MONITOR )
-		{
-			_debug( "Loaded " + channel.id + ": " + params.pathname );
-		}
-
-		channel.audio.removeEventListener( "canplaythrough", _onLoadHTML5, false ); // must be removed after initial load!
-
-		// Call .onLoad function if present
-
-		exec = params.onLoad;
-		if ( exec && ( typeof exec === "function" ) )
-		{
-			params.onLoad = null; // make sure it doesn't get called again!
-			try
-			{
-				exec( {
-					channel : channel.id,
-					name : params.name,
-					path : params.pathname,
-					duration: channel.duration,
-					data : params.data
-				} );
-			}
-			catch ( err )
-			{
-				_errorCatch( fn + "HTML5 load failed @ " + params.pathname + " [" + err.message + "]", err );
-				return;
-			}
-		}
-
-		// if set to autoplay after load, do it
-
-		if ( params.autoplay )
-		{
-			if ( _MONITOR )
-			{
-				_debug( "Autoplaying " + channel.id + " on load: " + channel.params.pathname );
-			}
-
-			params.autoplay = false; // only autoplay once!
-			_playHTML5Channel( channel, params );
-		}
-		else
-		{
-			channel.status = _CHANNEL_READY;
-		}
-	}
-
-	// HTML5 Audio onEnd handler
-
-	function _onDoneHTML5 ()
-	{
-		var fn, i, channel, params, exec;
-
-		fn = "[_onDoneHTML5] ";
-
-		i = this.getAttribute( "data-channel" );
-		i = parseInt( i, 10 );
-		channel = _channels[ i ];
-		params = channel.params;
-
-		if ( _MONITOR )
-		{
-			_debug( "Ending " + channel.id + ": " + params.pathname );
-		}
-
-		channel.status = _CHANNEL_READY;
-
-		// if channel has an onDone function, call it
-
-		exec = params.onDone;
-		if ( exec && ( typeof exec === "function" ) ) // one more check
-		{
-			try
-			{
-				exec( {
-					channel : channel.id,
-					name : params.name,
-					path : params.pathname,
-					duration: channel.duration,
-					data : params.data
-				} );
-			}
-			catch ( err )
-			{
-				_errorCatch( fn + ".onDone function failed @ " + params.pathname + " [" + err.message + "]", err );
-			}
-		}
-	}
-
-	// _loadHTML5Channel()
-	// Loads [channel] with an audio file defined by [params]
-
-	function _loadHTML5Channel ( channel, params )
-	{
-		var audio;
-
-		channel.params = params;
-		channel.status = _CHANNEL_LOADING;
-
-		audio = channel.audio;
-		channel.duration = Math.floor( audio.duration * 1000 );
-		audio.addEventListener( "canplaythrough", _onLoadHTML5, false ); // must be reset on every new load
-		audio.preload = "auto";
-		audio.volume = params.volume;
-		audio.loop = params.loop;
-		audio.setAttribute( "src", params.pathname ); // actually starts the load
-	}
-
-	// _loadHTML5Audio()
-	// Loads an audio file defined by [params]
-	// Returns { .filename, .channel } or AQ.ERROR
-
-	function _loadHTML5Audio ( params )
-	{
-		var i, channel, cnt;
-
-		// is this sound already available in an ended, unpaused channel?
-
-		for ( i = 0; i < _channelCnt; i += 1 )
-		{
-			channel = _channels[ i ];
-			if ( ( channel.params.pathname === params.pathname ) && ( channel.status === _CHANNEL_READY ) )
-			{
-				if ( _MONITOR )
-				{
-					_debug( "Found " + channel.id + " ready with " + params.pathname );
-				}
-				channel.audio.currentTime = 0; // reset to start
-				if ( params.autoplay )
-				{
-					_playHTML5Channel( channel, params ); // just play it again
-				}
-				return channel.id;
-			}
-		}
-
-		// next look for an unused channel
-
-		for ( i = 0; i < _MAX_CHANNELS; i += 1 ) // search all channels
-		{
-			channel = _channels[ i ];
-			if ( channel.status === _CHANNEL_EMPTY )
-			{
-				if ( _MONITOR )
-				{
-					_debug( "Found unused " + channel.id );
-				}
-				cnt = i + 1;
-				if ( cnt > _channelCnt )
-				{
-					_channelCnt = cnt; // new channel now in use
-				}
-				_loadHTML5Channel( channel, params );
-				return channel.id;
-			}
-		}
-
-		// Hijack a loaded but unlocked idle channel
-
-		for ( i = 0; i < _channelCnt; i += 1 )
-		{
-			channel = _channels[ i ];
-			if ( !channel.params.lock && ( channel.status === _CHANNEL_READY ) )
-			{
-				if ( _MONITOR )
-				{
-					_debug( "Hijacking " + channel.id + " for " + params.pathname );
-				}
-				channel.audio.currentTime = 0; // reset to start
-				_loadHTML5Channel( channel, params );
-				return channel.id;
-			}
-		}
-
-		if ( _MONITOR )
-		{
-			_debug( "No channel available for " + params.pathname );
-		}
-		return AQ.ERROR; // fail silently
-	}
-
-	// _playHTML5Audio()
-	// Plays using [params]
-	// Returns actual playing channel (which may be different from [id]) or AQ.ERROR
-
-	function _playHTML5Audio ( params )
-	{
-		var i, channel;
-
-		// play requested channel if ready
-
-		// is this sound already available in an ended, unpaused channel?
-
-		for ( i = 0; i < _channelCnt; i += 1 )
-		{
-			channel = _channels[i];
-			if ( ( channel.params.pathname === params.pathname ) && ( channel.status === _CHANNEL_READY ) )
-			{
-				if ( _MONITOR )
-				{
-					_debug( "Found " + channel.id + " ready with " + params.pathname );
-				}
-				channel.audio.currentTime = 0; // reset to start
-				_playHTML5Channel( channel, params );
-				return channel.id;
-			}
-		}
-
-		if ( _MONITOR )
-		{
-			_debug( "File " + params.pathname + " unavailable; loading" );
-		}
-
-		params.autoplay = true;
-		return _loadHTML5Audio( params );
-	}
-
-	// _pauseHTML5Audio()
-	// Pause/unpause channel [id]
-	// Returns channel id or AQ.ERROR
-
-	function _pauseHTML5Audio ( id )
-	{
-		var i, channel;
-
-		for ( i = 0; i < _channelCnt; i += 1 )
-		{
-			channel = _channels[ i ];
-			if ( channel.id === id )
-			{
-				if ( channel.status === _CHANNEL_PAUSED )
-				{
-					_playHTML5Channel( channel );
-				}
-
-				else if ( channel.status === _CHANNEL_PLAYING )
-				{
-					channel.status = _CHANNEL_PAUSED;
-					channel.audio.pause();
-				}
-				return id;
-			}
-		}
-
-		return AQ.ERROR; // fail silently
-	}
-
-	// _stopHTML5Audio()
-	// Stops channel [id]
-	// Returns AQ.DONE or AQ.ERROR
-
-	function _stopHTML5Audio ( id )
-	{
-		var i, channel, status;
-
-		for ( i = 0; i < _channelCnt; i += 1 )
-		{
-			channel = _channels[ i ];
-			if ( channel.id === id )
-			{
-				channel.params.autoplay = false; // prevents autoplay if still loading
-
-				status = channel.status;
-				if ( ( status === _CHANNEL_PLAYING ) || ( status === _CHANNEL_PAUSED ) )
-				{
-					channel.status = _CHANNEL_READY;
-					channel.audio.pause();
-					channel.audio.currentTime = 0; // reset to start
-				}
-				return AQ.DONE;
-			}
-		}
-
-		return AQ.ERROR;
-	}
-
-	// HTML5 Audio init
-
-	function _initHTML5Audio ()
-	{
-		var fn, i, audio;
-
-		fn = "[_initHTML5Audio] ";
-
-		// set up _MAX_CHANNELS Audio elements
-
-		// Each channel object has these properties:
-		// id: unique id string
-		// audio: HTML5 Audio element
-		// params: file/playback params
-		// status: status constant
-
-		_channels.length = _MAX_CHANNELS;
-
-		for ( i = 0; i < _MAX_CHANNELS; i += 1 )
-		{
-			audio = document.createElement( "audio" );
-			if ( !audio )
-			{
-				return _error( fn + "Audio element init failed" );
-			}
-			audio.setAttribute( "data-channel", i.toString() ); // remember this element's channel
-			audio.addEventListener( "error", _onErrorHTML5, false ); // establish onError listener
-			audio.addEventListener( "stalled", _onStalledHTML5, false ); // establish onStalled listener
-			audio.addEventListener( "ended", _onDoneHTML5, false ); // establish onDone listener
-			document.body.appendChild( audio );
-
-			_channels[ i ] = {
-				id : _PREFIX_CHANNEL + ( i + 1 ),
-				audio : audio,
-				duration : 0, // set later when audio loaded
-				params : null,
-				status : _CHANNEL_EMPTY
-			};
-		}
-
-		// set up executives
-
-		_loadExec = _loadHTML5Audio;
-		_playExec = _playHTML5Audio;
-		_pauseExec = _pauseHTML5Audio;
-		_stopExec = _stopHTML5Audio;
-
-		return AQ.HTML5_AUDIO;
-	}
-
 	// Return a params object with all defaults
 
-	function _defaultParams ( user_name )
+	function _defaultParams ( name )
 	{
 		return {
-			name : user_name,
+			name : name,
 			path : _defaultPath,
 			fileTypes : _defaultFileTypes,
 			lock : _DEFAULT.loop,
@@ -1483,10 +617,1131 @@ var AQ; // Global namespace for public API
 			loop : _DEFAULT.loop,
 			autoplay : _DEFAULT.autoplay,
 			onLoad : _DEFAULT.onLoad,
+			onPlay : _DEFAULT.onPlay,
 			onEnd : _DEFAULT.onEnd,
 			data : _DEFAULT.data
 		};
 	}
+
+	// -----------------
+	// Web Audio Support
+	// -----------------
+
+	var _web = {
+
+		context : null, // AudioContext handle
+		buffers : [], // active file buffer
+		bufferID : 0, // buffer ID counter
+
+		// _web.stopChannel ( channel )
+		// Stops channel in [channel] object
+		// Returns AQ.DONE
+
+		stopChannel : function ( channel )
+		{
+			var fn, source;
+
+			fn = "[AQ._web.stopChannel] ";
+
+			if ( _MONITOR )
+			{
+				_debug( fn + channel.id );
+			}
+
+			source = channel.source;
+			if ( source && ( source.playbackState !== _WEBAUDIO_FINISHED_STATE ) ) // if not finished, pause it
+			{
+				if ( channel.thandle )
+				{
+					window.clearTimeout( channel.thandle );
+				}
+
+				if ( source.stop !== undefined )
+				{
+					source.stop( 0 ); // this is the standard
+				}
+				else
+				{
+					source.noteOff( 0 ); // deprecated!
+				}
+
+				channel.status = _CHANNEL_READY;
+			}
+
+			return AQ.DONE;
+		},
+
+		// Generate a channel id
+
+		assignChannel : function ()
+		{
+			var id;
+
+			_channelID += 1;
+			id = _PREFIX_CHANNEL + _channelID;
+			return id;
+		},
+
+		// _web.playBuffer ( buffer, offset )
+		// Play file in [buffer] with optional [offset]
+		// Returns channel id
+
+		playBuffer : function ( buffer, offset )
+		{
+			var fn, ctx, source, gainNode, duration, timeout, id, channel, params, exec;
+
+			fn = "[AQ._web.playBuffer] ";
+
+			ctx = _web.context;
+
+			source = ctx.createBufferSource();
+			if ( !source )
+			{
+				return _error( fn + "Invalid bufferSource" );
+			}
+			source.buffer = buffer.audio;
+
+			if ( ctx.createGain !== undefined )
+			{
+				gainNode = ctx.createGain();
+			}
+			else
+			{
+				gainNode = ctx.createGainNode();
+			}
+
+			if ( !gainNode )
+			{
+				return _error( fn + "Invalid gainNode" );
+			}
+
+			source.connect( gainNode );
+			gainNode.connect( ctx.destination );
+			gainNode.gain.value = buffer.params.volume;
+
+			if ( offset === undefined )
+			{
+				offset = 0;
+			}
+
+			// calc timeout
+
+			duration = buffer.audio.duration - offset;
+			timeout = Math.floor( duration * 1000 );
+
+			// get a unique channel id if none assigned
+
+			if ( !buffer.channel_id )
+			{
+				buffer.channel_id = _web.assignChannel();
+			}
+			id = buffer.channel_id;
+
+			channel = {
+				id : id,
+				buffer : buffer,
+				source : source,
+				gainNode : gainNode,
+				startTime : ctx.currentTime - offset, // fixes multiple pauses
+				pauseTime : 0, // non-zero if paused
+				endTime : -1, // -1 if no end time specified
+				status : _CHANNEL_PLAYING
+			};
+
+			// Establish timeout for .onDone handling
+			// Save handle for pause
+			// Make it a closure for channel identification
+
+			channel.thandle = window.setTimeout(
+				function ()
+				{
+					var len, i, buffer;
+
+					// find the channel
+
+					len = _channels.length;
+					for ( i = 0; i < len; i += 1 )
+					{
+						channel = _channels[ i ];
+						if ( channel.id === id ) // id obtained from the closure
+						{
+							if ( _MONITOR )
+							{
+								_debug( fn + "Ending " + id + ": " + params.pathname );
+							}
+
+							// call user onEnd function if valid
+
+							buffer = channel.buffer;
+							params = buffer.params;
+							exec = params.onEnd;
+							if ( exec && ( typeof exec === "function" ) )
+							{
+								if ( _MONITOR )
+								{
+									_debug( fn + "Calling user .onEnd on " + id + ": " + params.pathname );
+								}
+								try
+								{
+									exec( {
+										channel: buffer.channel_id,
+										name: params.name,
+										path: params.pathname,
+										duration: buffer.duration,
+										data: params.data
+									} );
+								}
+								catch ( err )
+								{
+									_errorCatch( fn + "User .onEnd failed on " + id + ": " +
+										params.pathname + " [" + err.message + "]", err );
+								}
+							}
+
+							_web.stopChannel( channel );
+							_channels.splice( i, 1 );
+
+							// restart if looping
+
+							if ( params.loop )
+							{
+								_web.playBuffer( buffer, 0 ); // fix offset later
+							}
+							return;
+						}
+					}
+
+					_error( fn + "Channel " + id + " not found" );
+
+				}, timeout );
+
+			// save the channel
+
+			_channels.push( channel );
+
+			// begin playback
+
+			if ( source.start !== undefined )
+			{
+				source.start( 0, offset, duration );
+			}
+			else
+			{
+				source.noteGrainOn( 0, offset, duration ); // deprecated!
+			}
+
+			// Handle onPlay function if present
+
+			params = buffer.params;
+			exec = params.onPlay;
+			if ( exec && ( typeof exec === "function" ) )
+			{
+				if ( _MONITOR )
+				{
+					_debug( fn + "Calling user .onPlay for " + buffer.channel_id + ": " + params.pathname );
+				}
+				try
+				{
+					exec( {
+						channel : buffer.channel_id,
+						name : params.name,
+						path : params.pathname,
+						duration : buffer.duration,
+						data : params.data
+					} );
+				}
+				catch ( err )
+				{
+					_errorCatch( fn + "User .onPlay failed on " + buffer.channel_id + ": " +
+						params.pathname + " [" + err.message + "]", err );
+				}
+			}
+
+			return id;
+		},
+
+		// _web.load( params )
+		// Load file per [params]
+		// Return assigned channel id
+
+		load : function ( params )
+		{
+			var fn, len, i, buffer, id, request;
+
+			fn = "[AQ._web.load] ";
+
+			// see if this file is already loaded
+
+			len = _web.buffers.length;
+			for ( i = 0; i < len; i += 1 )
+			{
+				buffer = _web.buffers[ i ];
+				if ( buffer.params.pathname === params.pathname ) // already loaded
+				{
+					if ( _MONITOR )
+					{
+						_debug( fn + params.pathname + " found in " + buffer.id );
+					}
+					return buffer.channel_id;
+				}
+			}
+
+			// set up a new buffer record
+
+			_web.bufferID += 1; // unique id
+			id = _PREFIX_BUFFER + _web.bufferID;
+
+			buffer = {
+				id : id,
+				channel_id : _web.assignChannel(), // pre-assign the channel id
+				audio : null, // will get this when loaded
+				duration : 0, // this too
+				params : params
+			};
+
+			if ( _MONITOR )
+			{
+				_debug( fn + "Creating " + buffer.id + " for " + params.pathname );
+			}
+
+			request = new XMLHttpRequest();
+			if ( !request )
+			{
+				return _error( fn + "XMLHttpRequest error" );
+			}
+			request.open( 'GET', params.pathname, true );
+			request.responseType = "arraybuffer";
+			request.onload = function ()
+			{
+				if ( _MONITOR )
+				{
+					_debug( fn + "Loaded " + params.pathname + " into " + buffer.id );
+				}
+				_web.context.decodeAudioData( request.response,
+					function ( audio ) // on successful load
+					{
+						var exec;
+
+						buffer.audio = audio; // save decoded audio in buffer
+						buffer.duration = Math.floor( audio.duration * 1000 ); // convert to milliseconds
+						_web.buffers.push( buffer ); // save buffer object
+
+						if ( _MONITOR )
+						{
+							_debug( fn + "Decoded " + params.pathname + " in " + buffer.id +
+								" (" + buffer.duration + " ms)" );
+						}
+
+						// Call .onLoad function if present
+
+						exec = params.onLoad;
+						if ( exec && ( typeof exec === "function" ) )
+						{
+							params.onLoad = null; // make sure it doesn't get called again!
+							if ( _MONITOR )
+							{
+								_debug( fn + "Calling user .onLoad for " + buffer.channel_id + ": " + params.pathname );
+							}
+							try
+							{
+								exec( {
+									channel: buffer.channel_id,
+									name: params.name,
+									path: params.pathname,
+									duration: buffer.duration,
+									data: params.data
+								} );
+							}
+							catch ( err )
+							{
+								_errorCatch( fn + "User .onLoad failed on " + buffer.channel_id + ": " +
+									params.pathname + " [" + err.message + "]", err );
+							}
+						}
+
+						// Play immediately?
+
+						if ( buffer.params.autoplay )
+						{
+							if ( _MONITOR )
+							{
+								_debug( fn + "Autoplaying " + buffer.id + " :" + params.pathname );
+							}
+							_web.playBuffer( buffer );
+						}
+
+					},
+
+					function () // on error
+					{
+						_error( fn + "Error loading " + params.pathname );
+					} );
+			};
+
+			try
+			{
+				request.send();
+			}
+			catch ( err2 )
+			{
+				return _errorCatch( fn + "XMLHttpRequest failed: " + params.pathname + " [" + err2.message + "]", err2 );
+			}
+
+			return buffer.channel_id;
+		},
+
+		// _web.play ( params )
+		// Returns same id if paused, NEW id if restarted, else silent AQ.ERROR
+
+		play : function ( params )
+		{
+			var fn, len, i, buffer;
+
+			fn = "[AQ._web.play] ";
+
+			len = _web.buffers.length;
+			for ( i = 0; i < len; i += 1 )
+			{
+				buffer = _web.buffers[ i ];
+				if ( buffer.params.pathname === params.pathname ) // found it!
+				{
+					if ( _MONITOR )
+					{
+						_debug( fn + "Found " + params.pathname );
+					}
+					return _web.playBuffer( buffer );
+				}
+			}
+
+			if ( _MONITOR )
+			{
+				_debug( fn + params.pathname + " unavailable; loading" );
+			}
+
+			params.autoplay = true;
+			return _web.load( params );
+		},
+
+		// _web.playChannel ( id )
+		// Returns same id if paused, NEW id if restarted, else silent AQ.ERROR
+
+		playChannel : function ( id )
+		{
+			var fn, len, i, buffer;
+
+			fn = "[AQ._web.playChannel] ";
+
+			len = _web.buffers.length;
+			for ( i = 0; i < len; i += 1 )
+			{
+				buffer = _web.buffers[ i ];
+				if ( buffer.channel_id === id ) // found it!
+				{
+					return _web.playBuffer( buffer );
+				}
+			}
+
+			return _error( fn + id + " not found" );
+		},
+
+		// _web.pause ( id )
+		// [id] is a channel id
+		// Returns same id if paused, NEW id if restarted, else silent AQ.ERROR
+
+		pause : function ( id )
+		{
+			var fn, len, i, channel, buffer, source, ptime;
+
+			fn = "[AQ._web.pause] ";
+
+			len = _channels.length;
+			for ( i = 0; i < len; i += 1 )
+			{
+				channel = _channels[i];
+				if ( channel.id === id )
+				{
+					buffer = channel.buffer;
+					source = channel.source;
+					ptime = channel.pauseTime;
+					if ( ( ptime > 0 ) && ( channel.status === _CHANNEL_PAUSED ) ) // if paused, restart
+					{
+						_channels.splice( i, 1 ); // remove this channel
+						return _web.playBuffer( buffer, ptime ); // restart on new channel
+					}
+
+					// if channel not finished, stop it
+
+					// stop the ending function from being called!
+
+					if ( channel.thandle )
+					{
+						window.clearTimeout( channel.thandle );
+						channel.thandle = null;
+					}
+
+					if ( source && ( source.playbackState !== _WEBAUDIO_FINISHED_STATE ) )
+					{
+						ptime = _web.context.currentTime - channel.startTime;
+						ptime = ptime % buffer.audio.duration; // prevents overflow?
+						channel.pauseTime = ptime; // save pause time
+						channel.status = _CHANNEL_PAUSED;
+						if ( source.stop !== undefined )
+						{
+							source.stop( 0 ); // this is the standard
+						}
+						else
+						{
+							source.noteOff( 0 ); // deprecated!
+						}
+					}
+					else
+					{
+						_channels.splice( i, 1 ); // channel is finished, so delete it
+					}
+					return id;
+				}
+			}
+
+			if ( _MONITOR )
+			{
+				_debug( fn + id + " not found" );
+			}
+
+			return AQ.ERROR; // fail silently
+		},
+
+		stop : function ( id )
+		{
+			var fn, len, i, channel;
+
+			fn = "[AQ._web.stop] ";
+
+			len = _channels.length;
+			for ( i = 0; i < len; i += 1 )
+			{
+				channel = _channels[ i ];
+				if ( channel.id === id )
+				{
+					_web.stopChannel( channel );
+					_channels.splice( i, 1 ); // delete this channel
+					return AQ.DONE;
+				}
+			}
+
+			if ( _MONITOR )
+			{
+				_debug( fn + id + " not found" );
+			}
+
+			return AQ.ERROR; // fail silently
+		},
+
+		init : function ()
+		{
+			_web.buffers = [];
+			_web.bufferID = 0;
+			return AQ.WEB_AUDIO;
+		}
+	};
+
+	// --------------------
+	// HTML5 Audio handlers
+	// --------------------
+
+	var _html = {
+
+		// _html.onError ( event )
+		// DOM onError handler
+		// Called by browser if file load fails
+
+		onError : function ( event )
+		{
+			var fn, e, i, channel, c, str;
+
+			fn = "[AQ._html.onError] ";
+
+			e = event.currentTarget;
+			i = e.getAttribute( "data-channel" );
+			i = parseInt( i, 10 );
+			channel = _channels[ i ];
+
+			c = event.target.error.code;
+			switch ( c )
+			{
+				case 1:
+					str = "Playback aborted"; // "MEDIA_ERR_ABORTED";
+					break;
+				case 2:
+					str = "Network failure"; // "MEDIA_ERR_NETWORK";
+					break;
+				case 3:
+					str = "Source decode failed"; // "MEDIA_ERR_DECODE";
+					break;
+				case 4:
+					str = "Invalid source file"; // "MEDIA_ERR_SRC_NOT_SUPPORTED";
+					break;
+				default:
+					str = "Unknown"; // "UNKNOWN"
+					break;
+			}
+
+			_error( fn + str + " @ " + channel.id + ": " + channel.params.pathname );
+			return _endEvent( event );
+		},
+
+		// _html.onStalled ( event )
+		// DOM onStalled handler
+		// Called by browser if file stalls during loading
+
+		onStalled : function ( event )
+		{
+			var fn, e, i, channel;
+
+			fn = "[AQ._html.onStalled] ";
+
+			// Android always seems to stall ...
+
+			if ( _MONITOR )
+			{
+				// Retrieve associated channel index
+
+				e = event.currentTarget;
+				i = e.getAttribute( "data-channel" );
+				i = parseInt( i, 10 );
+				channel = _channels[ i ];
+				_debug( fn + channel.id + ": " + channel.params.pathname );
+			}
+			return _endEvent( event );
+		},
+
+		// _html.startChannel ( channel, params )
+		// Starts [channel] using optional [params]
+
+		startChannel : function ( channel, params )
+		{
+			var fn, audio, val, type;
+
+			fn = "[AQ._html.startChannel] ";
+
+			if ( _MONITOR )
+			{
+				_debug( fn + "Playing " + channel.id );
+			}
+
+			channel.status = _CHANNEL_PLAYING;
+			audio = channel.audio;
+
+			type = _typeOf( params );
+			if ( type === "object" )
+			{
+				val = params.volume;
+				type = _typeOf( val );
+				if ( type !== "undefined" )
+				{
+					channel.params.volume = val;
+					audio.volume = val;
+				}
+
+				val = params.loop;
+				type = _typeOf( val );
+				if ( type !== "undefined" )
+				{
+					channel.params.loop = val;
+					audio.loop = val; // must do this manually?
+				}
+
+				val = params.onDone;
+				type = _typeOf( val );
+				if ( type !== "undefined" )
+				{
+					channel.params.onDone = val;
+				}
+
+				val = params.userData;
+				type = _typeOf( val );
+				if ( type !== "undefined" )
+				{
+					channel.params.userData = val;
+				}
+
+				val = params.lock;
+				type = _typeOf( val );
+				if ( type !== "undefined" )
+				{
+					channel.params.lock = val;
+				}
+			}
+
+			audio.play();
+		},
+
+		// _html.onLoad ( event )
+		// DOM onLoad handler
+		// Called by browser when a file loads, supposedly
+
+		onLoad : function ( event )
+		{
+			var fn, e, i, channel, params, exec;
+
+			fn = "[AQ._html.onLoad] ";
+
+			e = event.currentTarget;
+			i = e.getAttribute( "data-channel" );
+			i = parseInt( i, 10 );
+			channel = _channels[ i ];
+			channel.status = _CHANNEL_READY;
+			params = channel.params;
+
+			if ( _MONITOR )
+			{
+				_debug( fn + channel.id + ": " + params.pathname );
+			}
+
+			// NOTE: Safari doesn't use canplaythrough event!
+
+			channel.audio.removeEventListener( "canplaythrough", _html.onLoad, false ); // must be removed after initial load!
+
+			// Call .onLoad function if present
+
+			exec = params.onLoad;
+			if ( exec && ( typeof exec === "function" ) )
+			{
+				params.onLoad = null; // make sure it doesn't get called again!
+				if ( _MONITOR )
+				{
+					_debug( fn + "Calling user .onLoad on " + channel.id + ": " + params.pathname );
+				}
+				try
+				{
+					exec( {
+						channel : channel.id,
+						name : params.name,
+						path : params.pathname,
+						duration : channel.duration,
+						data : params.data
+					} );
+				}
+				catch ( err )
+				{
+					_errorCatch( fn + "User .onLoad failed on " + channel.id + ": " + params.pathname + " [" + err.message + "]", err );
+					return _endEvent( event );
+				}
+			}
+
+			// if set to autoplay after load, do it
+
+			if ( params.autoplay )
+			{
+				if ( _MONITOR )
+				{
+					_debug( fn + "Autoplaying " + channel.id );
+				}
+
+				params.autoplay = false; // only autoplay once!
+				_html.startChannel( channel, params );
+			}
+
+			return _endEvent( event );
+		},
+
+		// _html.onPlay ( event )
+		// DOM onPlay handler
+		// Called by browser when file starts playing
+
+		onPlay : function ( event )
+		{
+			var fn, e, i, channel, params, exec;
+
+			fn = "[AQ._html.onPlay] ";
+
+			e = event.currentTarget;
+			i = e.getAttribute( "data-channel" );
+			i = parseInt( i, 10 );
+			channel = _channels[ i ];
+			params = channel.params;
+
+			if ( _MONITOR )
+			{
+				_debug( fn + channel.id + ": " + params.pathname + " (" +
+					channel.duration + "ms)" );
+			}
+
+			// if channel has an .onPlay function, call it
+
+			exec = params.onPlay;
+			if ( exec && ( typeof exec === "function" ) ) // one more check
+			{
+				if ( _MONITOR )
+				{
+					_debug( fn + "Calling user .onPlay on " + channel.id + ": " + params.pathname );
+				}
+				try
+				{
+					exec( {
+						channel : channel.id,
+						name : params.name,
+						path : params.pathname,
+						duration : channel.duration,
+						data : params.data
+					} );
+				}
+				catch ( err )
+				{
+					_errorCatch( fn + "User .onPlay failed on " + channel.id + ": " +
+						params.pathname + " [" + err.message + "]", err );
+				}
+			}
+			return _endEvent( event );
+		},
+
+		// _html.onEnd ( event )
+		// DOM onEnd handler
+		// Called by browser when a file stops playing
+
+		onEnd : function ( event )
+		{
+			var fn, e, i, channel, params, exec;
+
+			fn = "[AQ._html.onEnd] ";
+
+			e = event.currentTarget;
+			i = e.getAttribute( "data-channel" );
+			i = parseInt( i, 10 );
+			channel = _channels[ i ];
+			params = channel.params;
+
+			if ( _MONITOR )
+			{
+				_debug( fn + channel.id + ": " + params.pathname );
+			}
+
+			channel.status = _CHANNEL_READY;
+
+			// if channel has an onEnd function, call it
+
+			exec = params.onEnd;
+			if ( exec && ( typeof exec === "function" ) ) // one more check
+			{
+				if ( _MONITOR )
+				{
+					_debug( fn + "Calling user .onEnd on " + channel.id + ": " + params.pathname );
+				}
+				try
+				{
+					exec( {
+						channel : channel.id,
+						name : params.name,
+						path : params.pathname,
+						duration : channel.duration,
+						data : params.data
+					} );
+				}
+				catch ( err )
+				{
+					_errorCatch( fn + "User .onEnd failed on " + channel.id + ": " +
+						params.pathname + " [" + err.message + "]", err );
+				}
+			}
+			return _endEvent( event );
+		},
+
+		// _html.loadChannel ( channel, params )
+		// Loads [channel] with an audio file defined by [params]
+
+		loadChannel : function ( channel, params )
+		{
+			var fn, audio;
+
+			fn = "[AQ._html.loadChannel] ";
+
+			channel.params = params;
+			channel.status = _CHANNEL_LOADING;
+
+			audio = channel.audio;
+			channel.duration = Math.floor( audio.duration * 1000 );
+
+			// NOTE: Safari supposedly does not support canplaythrough!
+
+			audio.addEventListener( "canplaythrough", _html.onLoad, false ); // must be reset on every new load
+			audio.preload = "auto";
+			audio.volume = params.volume;
+			audio.loop = params.loop;
+
+			if ( _MONITOR )
+			{
+				_debug( fn + channel.id + ": " + params.filepath + " (" +
+					channel.duration + "ms)" );
+			}
+
+			audio.setAttribute( "src", params.pathname ); // actually starts the load
+		},
+
+		// _html.load ( params )
+		// Loads an audio file defined by [params]
+		// Returns { .filename, .channel } or AQ.ERROR
+
+		load : function ( params )
+		{
+			var fn, i, channel, cnt;
+
+			fn = "[AQ._html.load] ";
+
+			// is this sound already available in an ended, unpaused channel?
+
+			for ( i = 0; i < _channelCnt; i += 1 )
+			{
+				channel = _channels[ i ];
+				if ( ( channel.params.pathname === params.pathname ) && ( channel.status === _CHANNEL_READY ) )
+				{
+					if ( _MONITOR )
+					{
+						_debug( fn + channel.id + " ready: " + params.pathname );
+					}
+					channel.audio.currentTime = 0; // reset to start
+					if ( params.autoplay )
+					{
+						_html.startChannel( channel, params ); // just play it again
+					}
+					return channel.id;
+				}
+			}
+
+			// next look for an unused channel
+
+			for ( i = 0; i < _MAX_CHANNELS; i += 1 ) // search all channels
+			{
+				channel = _channels[ i ];
+				if ( channel.status === _CHANNEL_EMPTY )
+				{
+					if ( _MONITOR )
+					{
+						_debug( fn + channel.id + " unused: " + params.pathname );
+					}
+					cnt = i + 1;
+					if ( cnt > _channelCnt )
+					{
+						_channelCnt = cnt; // new channel now in use
+					}
+					_html.loadChannel( channel, params );
+					return channel.id;
+				}
+			}
+
+			// Hijack a loaded but unlocked idle channel
+
+			for ( i = 0; i < _channelCnt; i += 1 )
+			{
+				channel = _channels[ i ];
+				if ( !channel.params.lock && ( channel.status === _CHANNEL_READY ) )
+				{
+					if ( _MONITOR )
+					{
+						_debug( fn + channel.id + " hijacked: " + params.pathname );
+					}
+					channel.audio.currentTime = 0; // reset to start
+					_html.loadChannel( channel, params );
+					return channel.id;
+				}
+			}
+
+			if ( _MONITOR )
+			{
+				_debug( fn + "No channel available: " + params.pathname );
+			}
+			return AQ.ERROR; // fail silently
+		},
+
+		// _html.play ( params )
+		// Plays using [params]
+		// Returns actual playing channel (which may be different from [id]) or AQ.ERROR
+
+		play : function ( params )
+		{
+			var fn, i, channel;
+
+			fn = "[AQ._html.play] ";
+
+			// play requested channel if ready
+
+			// is this sound already available in an ended, unpaused channel?
+
+			for ( i = 0; i < _channelCnt; i += 1 )
+			{
+				channel = _channels[i];
+				if ( ( channel.params.pathname === params.pathname ) && ( channel.status === _CHANNEL_READY ) )
+				{
+					if ( _MONITOR )
+					{
+						_debug( fn + channel.id + " ready: " + params.pathname );
+					}
+					channel.audio.currentTime = 0; // reset to start
+					_html.startChannel( channel, params );
+					return channel.id;
+				}
+			}
+
+			if ( _MONITOR )
+			{
+				_debug( fn + params.pathname + " unavailable; loading" );
+			}
+
+			params.autoplay = true;
+			return _html.load( params );
+		},
+
+		// _html.playChannel ( id )
+		// Plays channel [id]
+		// Returns actual playing channel (which may be different from [id]) or AQ.ERROR
+
+		playChannel : function ( id )
+		{
+			var fn, i, channel;
+
+			fn = "[AQ._html.playChannel] ";
+
+			// Play requested channel if ready
+
+			for ( i = 0; i < _channelCnt; i += 1 )
+			{
+				channel = _channels[i];
+				if ( channel.id === id )
+				{
+					if ( _MONITOR )
+					{
+						_debug( fn + "Found " + id );
+					}
+					if ( channel.status !== _CHANNEL_READY )
+					{
+						return _error( fn + id + " not ready" );
+					}
+
+					// reset to start
+
+					channel.audio.currentTime = 0;
+					_html.startChannel( channel );
+					return channel.id;
+				}
+			}
+
+			return _error( fn + id + " not found" );
+		},
+
+		// _html.pause ( id )
+		// Pause/unpause channel [id]
+		// Returns channel id or AQ.ERROR
+
+		pause : function ( id )
+		{
+			var fn, i, channel;
+
+			fn = "[AQ._html.pause] ";
+
+			for ( i = 0; i < _channelCnt; i += 1 )
+			{
+				channel = _channels[ i ];
+				if ( channel.id === id )
+				{
+					if ( channel.status === _CHANNEL_PAUSED )
+					{
+						_html.startChannel( channel );
+					}
+
+					else if ( channel.status === _CHANNEL_PLAYING )
+					{
+						channel.status = _CHANNEL_PAUSED;
+						channel.audio.pause();
+					}
+					return id;
+				}
+			}
+
+			if ( _MONITOR )
+			{
+				_debug( fn + id + " not found" );
+			}
+
+			return AQ.ERROR; // fail silently
+		},
+
+		// _html.stop ( id )
+		// Stops channel [id]
+		// Returns AQ.DONE or AQ.ERROR
+
+		stop : function ( id )
+		{
+			var fn, i, channel, status;
+
+			fn = "[AQ._html.stop] ";
+
+			for ( i = 0; i < _channelCnt; i += 1 )
+			{
+				channel = _channels[ i ];
+				if ( channel.id === id )
+				{
+					channel.params.autoplay = false; // prevents autoplay if still loading
+					status = channel.status;
+					if ( ( status === _CHANNEL_PLAYING ) || ( status === _CHANNEL_PAUSED ) )
+					{
+						channel.status = _CHANNEL_READY;
+						channel.audio.pause();
+						channel.audio.currentTime = 0; // reset to start
+					}
+					return AQ.DONE;
+				}
+			}
+
+			if ( _MONITOR )
+			{
+				_debug( fn + id + " not found" );
+			}
+
+			return AQ.ERROR;
+		},
+
+		// HTML5 Audio init
+
+		init : function ()
+		{
+			var fn, i, audio;
+
+			fn = "[AQ._html.init] ";
+
+			// set up _MAX_CHANNELS Audio elements
+
+			// Each channel object has these properties:
+			// id: unique id string
+			// audio: HTML5 Audio element
+			// params: file/playback params
+			// status: status constant
+
+			_channels.length = _MAX_CHANNELS;
+
+			for ( i = 0; i < _MAX_CHANNELS; i += 1 )
+			{
+				audio = document.createElement( "audio" );
+				if ( !audio )
+				{
+					return _error( fn + "element init failed" );
+				}
+				audio.setAttribute( "data-channel", i.toString() ); // remember this element's channel
+				audio.addEventListener( "error", _html.onError, false ); // establish onError listener
+				audio.addEventListener( "stalled", _html.onStalled, false ); // establish onStalled listener
+				audio.addEventListener( "play", _html.onPlay, false ); // establish onPlay listener
+				audio.addEventListener( "ended", _html.onEnd, false ); // establish onEnd listener
+				document.body.appendChild( audio );
+
+				_channels[ i ] = {
+					id : _PREFIX_CHANNEL + ( i + 1 ),
+					audio : audio,
+					duration : 0, // set later when audio loaded, we hope
+					params : null,
+					status : _CHANNEL_EMPTY
+				};
+			}
+
+			return AQ.HTML5_AUDIO;
+		}
+	};
 
 	// --------------
 	// AQ Public API
@@ -1514,7 +1769,7 @@ var AQ; // Global namespace for public API
 
 		init : function ( params )
 		{
-			var fn, e, item, codec, canplay, val, type, status;
+			var fn, e, item, codec, canplay, val, type, status, contextClass;
 
 			fn = "[AQ.init] ";
 
@@ -1667,42 +1922,25 @@ var AQ; // Global namespace for public API
 			_channelCnt = 0;
 			_channelID = 0;
 
-			_buffers.length = 0;
-			_bufferID = 0;
-
 			// check for Web Audio API, default to HTML5 if forced or not available
 
-			_context = null;
+			_web.context = null;
 			_usingWebAudio = false;
-
 			if ( !_forceHTML5 )
 			{
-				type = _typeOf ( AudioContext );
-				if ( type !== "undefined" ) // WC3 compliant
+				contextClass = ( window.AudioContext || window.webkitAudioContext || window.mozAudioContext || window.oAudioContext || window.msAudioContext );
+				if ( contextClass )
 				{
-					_context = new AudioContext();
-					if ( !_context )
+					_web.context = new contextClass();
+					if ( !_web.context )
 					{
-						return _error( "AudioContext init failed" );
+						return _error( fn + "AudioContext init failed" );
 					}
 					_usingWebAudio = true;
 				}
-				else
-				{
-					type = _typeOf ( webkitAudioContext );
-					if ( type !== "undefined" ) // Webkit
-					{
-						_context = new webkitAudioContext();
-						if ( !_context )
-						{
-							return _error( "webkitAudioContext init failed" );
-						}
-						_usingWebAudio = true;
-					}
-				}
 			}
 
-			// call appropriate initializer
+			// Drop down to HTML audio if can't/won't use Web Audio
 
 			if ( !_usingWebAudio )
 			{
@@ -1712,16 +1950,22 @@ var AQ; // Global namespace for public API
 				{
 					return _error( fn + "HTML5 Audio not supported" );
 				}
-				status = _initHTML5Audio();
+				_exec = _html;
 			}
 			else
 			{
-				status = _initWebAudio();
+				_exec = _web;
 			}
 
+			status = _exec.init();
 			if ( status !== AQ.ERROR )
 			{
 				_enabled = true; // ready to use!
+			}
+
+			if ( _MONITOR )
+			{
+				_debug( fn + "status = " + status );
 			}
 
 			return {
@@ -1781,13 +2025,13 @@ var AQ; // Global namespace for public API
 
 			params.pathname = params.path + params.name + "." + params.fileTypes[ 0 ];
 
-			// dispatch to appropriate API
+			// dispatch to loader
 
-			result = _loadExec( params );
+			result = _exec.load( params );
 
 			if ( _MONITOR )
 			{
-				_debug( fn + "Loaded " + params.pathname + ", status = " + result );
+				_debug( fn + "Loaded " + params.pathname + ", result = " + result );
 			}
 
 			return result;
@@ -1795,17 +2039,18 @@ var AQ; // Global namespace for public API
 
 		// play()
 		// Play a file
-		// REQUIRED [name] is a filename
-		// OPTIONAL [params] is an object with the following optional properties:
-		// .volume (default: engine default) = initial volume for channel
-		// .start (default: 0) = time in millseconds where playback should begin
-		// .end (default: -1) = time in millseconds where playback should end
-		// .loop (default: false) = true if channel should loop when played
-		// .onDone (default: null) = function to call when audio ends, with .data as parameter
-		// .data (default: pathname) = data that will be passed as parameter to .onDone function if present
+		// (Required) name : string = name of file without extension
+		// (Optional) uparams : object = object with the following optional properties:
+		// .volume : number (default: engine default) = initial volume for channel
+		// .start : number (default: 0) = time in millseconds where playback should begin
+		// .end : number (default: -1) = time in millseconds where playback should end
+		// .loop : boolean (default: false) = true if channel should loop when played
+		// .onPlay : function (default: null) = function to call when audio plays, with .data as parameter
+		// .onDone : function (default: null) = function to call when audio ends, with .data as parameter
+		// .data : any value (default: pathname) = data that will be passed as parameter to .onPlay/.onDone functions if present
 		// Returns unique channel id string on success, else AQ.ERROR
 
-		play : function ( user_name, user_params )
+		play : function ( name, uparams )
 		{
 			var fn, params, result;
 
@@ -1816,16 +2061,16 @@ var AQ; // Global namespace for public API
 
 			fn = "[AQ.play] ";
 
-			if ( !user_name || ( typeof user_name !== "string" ) || ( user_name.length < 1 ) )
+			if ( !name || ( typeof name !== "string" ) || ( name.length < 1 ) )
 			{
 				return _error( fn + "name parameter invalid" );
 			}
 
 			// set up default channel params
 
-			params = _defaultParams( user_name );
+			params = _defaultParams( name );
 
-			if ( _checkParams( fn, params, user_params ) === AQ.ERROR )
+			if ( _checkParams( fn, params, uparams ) === AQ.ERROR )
 			{
 				return AQ.ERROR;
 			}
@@ -1836,24 +2081,57 @@ var AQ; // Global namespace for public API
 
 			// dispatch to appropriate API
 
-			result = _playExec( params );
+			result = _exec.play( params );
 
 			if ( _MONITOR )
 			{
-				_debug( fn + "Played " + params.pathname + ", channel = " + result );
+				_debug( fn + "Played " + params.pathname + ", result = " + result );
+			}
+
+			return result;
+		},
+
+		// playChannel()
+		// Play a channel
+		// (Required) channel : string = channel id returned by AQ.load() or AQ.play()
+		// Returns unique channel id string on success, else AQ.ERROR
+
+		playChannel : function ( channel )
+		{
+			var fn, result;
+
+			if ( !_enabled )
+			{
+				return AQ.ERROR;
+			}
+
+			fn = "[AQ.playChannel] ";
+
+			if ( !channel || ( typeof channel !== "string" ) || ( channel.length < 1 ) )
+			{
+				return _error( fn + "Invalid channel id" );
+			}
+
+			// dispatch to appropriate API
+
+			result = _exec.playChannel( channel );
+
+			if ( _MONITOR )
+			{
+				_debug( fn + "Played " + channel + ", result = " + result );
 			}
 
 			return result;
 		},
 
 		// pause()
-		// Pause/unpause an audio channel
-		// REQUIRED [channel_id] is an audio channel id supplied by play()
-		// Returns channel id string, else AQ.ERROR
+		// Pause/unpause a previously loaded channel
+		// (Required) channel : string = channel id supplied by AQ.load() or AQ.play()
+		// Returns new channel id string, else AQ.ERROR
 
-		pause : function ( channel_id )
+		pause : function ( channel )
 		{
-			var fn, status;
+			var fn, result;
 
 			if ( !_enabled )
 			{
@@ -1862,31 +2140,31 @@ var AQ; // Global namespace for public API
 
 			fn = "[AQ.pause] ";
 
-			if ( !channel_id || ( typeof channel_id !== "string" ) || ( channel_id.length < 1 ) )
+			if ( !channel || ( typeof channel !== "string" ) || ( channel.length < 1 ) )
 			{
-				return _error( fn + "channel id invalid" );
+				return _error( fn + "Invalid channel id" );
 			}
 
 			// dispatch to appropriate API
 
-			status = _pauseExec( channel_id );
+			result = _exec.pause( channel );
 
 			if ( _MONITOR )
 			{
-				_debug( fn + "Paused " + channel_id + ", returned " + status );
+				_debug( fn + "Paused " + channel + ", result = " + result );
 			}
 
-			return status;
+			return result;
 		},
 
-		// stop()
-		// Stops an audio channel
-		// REQUIRED [channel_id] is an audio channel id supplied by play()
-		// Returns true on success, else AQ.ERROR
+		// stop( channel )
+		// Stops a previously loaded channel
+		// (Required) channel : string = channel id supplied by AQ.load() or AQ.play()
+		// Returns AQ.DONE or AQ.ERROR
 
-		stop : function ( channel_id )
+		stop : function ( channel )
 		{
-			var fn, status;
+			var fn, result;
 
 			if ( !_enabled )
 			{
@@ -1895,21 +2173,21 @@ var AQ; // Global namespace for public API
 
 			fn = "[AQ.stop] ";
 
-			if ( !channel_id || ( typeof channel_id !== "string" ) || ( channel_id.length < 1 ) )
+			if ( !channel || ( typeof channel !== "string" ) || ( channel.length < 1 ) )
 			{
-				return _error( fn + "channel id invalid" );
+				return _error( fn + "Invalid channel id" );
 			}
 
 			// dispatch to appropriate API
 
-			status = _stopExec( channel_id );
+			result = _exec.stop( channel );
 
 			if ( _MONITOR )
 			{
-				_debug( fn + "Stopped " + channel_id + ", returned " + status );
+				_debug( fn + "Stopped " + channel + ", result = " + result );
 			}
 
-			return status;
+			return result;
 		}
 	};
 
